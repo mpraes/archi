@@ -313,8 +313,9 @@ jobs:
             dist/archi_*.rpm
 
       # ---- Homebrew tap: bump formula with new URL + sha256 --------------
+      # NOTE: requires HOMEBREW_TAP_TOKEN secret on the repo. If absent, step fails
+      # and the formula needs manual updating in mpraes/homebrew-tap.
       - name: Bump Homebrew tap formula
-        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
@@ -357,8 +358,8 @@ jobs:
           git push
 
       # ---- AUR: publish -bin package ------------------------------------
+      # NOTE: requires AUR_SSH_PRIVATE_KEY, AUR_USER, AUR_EMAIL secrets.
       - name: Publish AUR -bin
-        if: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
         uses: KSXGitHub/github-actions-deploy-aur@v3
         with:
           pkgname: archi-bin
