@@ -12,7 +12,7 @@ import (
 func attachStyledHelp(root *cobra.Command) {
 	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd.Name() != root.Name() {
-			_ = cmd.Help()
+			fmt.Fprintln(cmd.OutOrStdout(), renderSubcommandHelp(cmd))
 			return
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), renderRootHelp(cmd))
@@ -105,4 +105,50 @@ func renderRootHelp(cmd *cobra.Command) string {
 	b.WriteString(subtitle.Render(`Dica: use "archi [command] --help" para ajuda detalhada por comando.`))
 
 	return b.String()
+}
+
+func renderSubcommandHelp(cmd *cobra.Command) string {
+	var b strings.Builder
+	b.WriteString(cmd.Short)
+	if cmd.Long != "" {
+		b.WriteString("\n\n")
+		b.WriteString(cmd.Long)
+	}
+	b.WriteString("\n\nUsage:\n  ")
+	b.WriteString(cmd.CommandPath())
+	if cmd.Use != "" {
+		parts := strings.Fields(cmd.Use)
+		if len(parts) > 1 {
+			b.WriteString(" ")
+			b.WriteString(strings.Join(parts[1:], " "))
+		}
+	}
+	b.WriteString("\n")
+
+	b.WriteString("\nFlags:\n")
+	cmd.NonInheritedFlags().VisitAll(func(f *pflag.Flag) {
+		renderFlagLine(&b, f)
+	})
+	cmd.InheritedFlags().VisitAll(func(f *pflag.Flag) {
+		renderFlagLine(&b, f)
+	})
+	return b.String()
+}
+
+func renderFlagLine(b *strings.Builder, f *pflag.Flag) {
+	if f.Shorthand != "" {
+		b.WriteString(fmt.Sprintf("  -%s, --%s", f.Shorthand, f.Name))
+	} else {
+		b.WriteString(fmt.Sprintf("      --%s", f.Name))
+	}
+	if f.Value.Type() != "bool" {
+		b.WriteString(" ")
+		b.WriteString(f.Value.Type())
+	}
+	b.WriteString("\n      ")
+	b.WriteString(f.Usage)
+	if f.DefValue != "" && f.DefValue != "false" {
+		b.WriteString(fmt.Sprintf(" (default: %s)", f.DefValue))
+	}
+	b.WriteString("\n")
 }

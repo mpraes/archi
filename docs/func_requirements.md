@@ -1,45 +1,67 @@
 # Requisitos Funcionais de Domínio (RFD)
 
-## 1. Mapeamento, Sintaxe e Granularidade Fina
+Este documento reflete o **estado funcional implementado**.
 
-- **RFD-001: Resolução de Escopo de Módulos**  
-  O sistema deve varrer o diretório raiz informado e identificar automaticamente os limites de cada módulo ou pacote com base nos arquivos de manifesto da linguagem alvo (ex: `go.mod`, `package.json`).
+## 1. Descoberta e parsing
 
-- **RFD-002: Inventário de Estruturas Anatômicas (Blocos)**  
-  O sistema deve realizar o parsing dos arquivos utilizando uma engine leve (Tree-sitter), catalogando individualmente cada Classe, Método e Função, registrando suas linhas de início/fim e escopo.
+- **RFD-001: Descoberta de módulos por diretório/language path**  
+  O sistema varre a raiz informada e organiza módulos por diretório (com resolução por `go.mod` para nomes Go quando disponível).
 
-- **RFD-003: Mapeamento do Grafo de Chamadas Internas (Call Graph)**  
-  O sistema deve identificar as relações de invocação de funções/métodos dentro do mesmo módulo para descobrir código órfão (nunca chamado) e funções centralizadoras (God Functions).
+- **RFD-002: Parsing resiliente multi-linguagem**  
+  O parser suporta Go, JavaScript/TypeScript e Python, com auto-detecção ou força por `--lang`.
 
-## 2. Métricas de Acoplamento e Sequência Principal
+- **RFD-003: Inventário anatômico por arquivo**  
+  O sistema extrai funções, métodos e tipos/classes, com linhas de início/fim, complexidade e chamadas detectadas.
 
-- **RFD-004: Construção do Grafo de Dependências**  
-  O sistema deve extrair as diretivas de importação de cada arquivo para mapear as conexões externas e rastrear qual bloco de código específico (função/método) é o responsável por disparar aquele acoplamento eferente.
+## 2. Métricas arquiteturais
 
-- **RFD-005: Cálculo de Acoplamento Aferente ($C_a$) e Eferente ($C_e$)**  
-  O sistema deve computar o número de módulos externos que dependem de um módulo específico ($C_a$) e o número de módulos externos dos quais esse módulo depende ($C_e$).
+- **RFD-004: Grafo de dependências internas**  
+  O sistema resolve imports internos por módulo para construir acoplamento eferente.
 
-- **RFD-006: Cálculo de Instabilidade ($I$) e Abstração ($A$)**  
-  O sistema deve calcular o índice de instabilidade de cada módulo baseado na proporção de acoplamento, e o índice de abstração baseado na contagem de estruturas abstratas (interfaces ou assinaturas) em relação ao total de componentes concretos.
+- **RFD-005: Acoplamento aferente/eferente (`Ca`/`Ce`)**  
+  O sistema computa dependências de entrada e saída para cada módulo.
 
-- **RFD-007: Cálculo da Distância da Sequência Principal ($D$)**  
-  O sistema deve aplicar a fórmula $D = \left|A + I - 1\right|$ para cada módulo, classificando-os de forma determinística em zonas críticas (Zona da Dor ou Zona da Inutilidade).
+- **RFD-006: Instabilidade (`I`) e abstração (`A`)**  
+  O sistema calcula instabilidade por proporção de acoplamento e abstração por razão de elementos abstratos/concretos.
 
-- **RFD-008: Cálculo de Complexidade Ciclomática por Bloco**  
-  O sistema deve contar o número de caminhos lineares independentes (estruturas de decisão como `if`, `for`, `switch`) em cada função ou método para enriquecer o diagnóstico de manutenibilidade.
+- **RFD-007: Distância da sequência principal (`D`)**  
+  O sistema aplica `D = |A + I - 1|` por módulo.
 
-## 3. Análise de Conascência Estática
+- **RFD-008: Complexidade ciclomática**  
+  O sistema calcula complexidade por bloco e agrega `maxComplexity` e `totalComplexity` por módulo.
 
-- **RFD-009: Detecção de Conascência de Nome (CoN)**  
-  O sistema deve sinalizar quando um componente depende explicitamente de assinaturas textuais rígidas (nomes exatos de métodos ou propriedades) de outro componente.
+## 3. Diagnóstico de risco estrutural
 
-- **RFD-010: Detecção de Conascência de Significado / Valor (CoM)**  
-  O sistema deve varrer o código em busca de valores literais idênticos (magic numbers ou strings hardcoded) compartilhados entre arquivos de módulos diferentes que possuam acoplamento lógico, inferindo dependência oculta de significado.
+- **RFD-009: Código órfão**  
+  O sistema marca blocos não referenciados no call map coletado.
 
-## 4. Integração Opcional com IA
+- **RFD-010: God blocks**  
+  O sistema marca blocos com complexidade acima do limiar heurístico atual.
 
-- **RFD-011: Consolidação do Payload de Métricas**  
-  O sistema deve serializar todos os resultados numéricos, grafos e alertas gerados em um esquema JSON compacto, omitindo completamente o código-fonte original.
+- **RFD-011: Conascência estática**  
+  O sistema detecta:
+  - conascência de nome (`kind: "name"`) por chamadas entre módulos;
+  - conascência de significado (`kind: "meaning"`) por literais compartilhados entre módulos.
 
-- **RFD-012: Enriquecimento de Insights por IA (Execução Condicional)**  
-  Caso a chave de API correspondente esteja presente no ambiente, o sistema deve enviar o JSON de métricas para o LLM e injetar na interface web recomendações arquiteturais textuais e acionáveis para os 3 pontos mais críticos detectados.
+- **RFD-012: Hotspots**  
+  O sistema destaca módulos em risco (zona de dor heurística e/ou presença de god blocks).
+
+## 4. API local e interface
+
+- **RFD-013: API de métricas local**  
+  Endpoints locais:
+  - `GET /api/metrics`
+  - `GET /api/modules/{module}`
+  - `GET /api/ai/enabled`
+  - `GET /api/ai/insights` (SSE)
+
+- **RFD-014: Dashboard com baseline local**  
+  A interface compara o scan atual com o último snapshot salvo no `localStorage`, mostrando deltas de risco e regressões/evoluções.
+
+## 5. IA opcional
+
+- **RFD-015: Payload sem código-fonte**  
+  O payload para IA contém apenas métricas e relações estruturais, sem conteúdo de código.
+
+- **RFD-016: Streaming de insights**  
+  Insights são enviados por SSE em chunks para não bloquear a renderização inicial do dashboard.

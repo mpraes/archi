@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Multi-language parser support for JavaScript/TypeScript and Python via tree-sitter, alongside the existing Go parser.
+- Local API endpoint `GET /api/modules/{module}` for per-module detail retrieval.
+- Dashboard baseline comparison (last-scan snapshot in localStorage) with regression/evolution highlights.
+- Module language breakdown and richer module diagnostics (god blocks, orphan blocks, total complexity).
+
+### Changed
+- UI focus shifted to an analytical report + comparative KPIs, with the scatter map as a secondary support view.
+- Built-in scan excludes expanded to include additional build and Python artifacts (`dist`, `build`, `out`, `venv`, `.venv`, `__pycache__`, `*.pyc`, extra `*.spec.*`).
+- AI activation flow now enables automatically when `GEMINI_API_KEY` or `--api-key` is available, while preserving non-blocking streaming behavior.
 
 ## [0.1.0] - 2026-07-04
 ### Added

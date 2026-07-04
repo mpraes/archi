@@ -33,12 +33,12 @@ func NewRootCmd(version string) *cobra.Command {
 		RunE:    func(cmd *cobra.Command, args []string) error { return runRoot(cmd, args, g) },
 	}
 	attachStyledHelp(root)
-	root.Flags().BoolVarP(&g.AIPresent, "ai", "a", false, "Ativa os insights do consultor virtual via IA")
-	root.Flags().StringVar(&g.APIKey, "api-key", "", "Chave de API do Gemini (alternativa à variável de ambiente)")
-	root.Flags().IntVarP(&g.Port, "port", "p", 8080, "Porta para o servidor web local")
-	root.Flags().BoolVar(&g.NoBrowser, "no-browser", false, "Não abre o navegador automaticamente após o escaneamento")
-	root.Flags().StringVarP(&g.Lang, "lang", "l", "", "Força uma linguagem específica para o parsing (go, ts)")
-	root.Flags().StringSliceVar(&g.Exclude, "exclude", nil, "Pastas ou arquivos adicionais para ignorar")
+	root.PersistentFlags().BoolVarP(&g.AIPresent, "ai", "a", false, "Ativa os insights do consultor virtual via IA")
+	root.PersistentFlags().StringVar(&g.APIKey, "api-key", "", "Chave de API do Gemini (alternativa à variável de ambiente)")
+	root.PersistentFlags().IntVarP(&g.Port, "port", "p", 8080, "Porta para o servidor web local")
+	root.PersistentFlags().BoolVar(&g.NoBrowser, "no-browser", false, "Não abre o navegador automaticamente após o escaneamento")
+	root.PersistentFlags().StringVarP(&g.Lang, "lang", "l", "", "Força uma linguagem específica para o parsing (go, ts, js, py, all)")
+	root.PersistentFlags().StringSliceVar(&g.Exclude, "exclude", nil, "Pastas ou arquivos adicionais para ignorar")
 
 	root.AddCommand(newExportCmd(g))
 	root.AddCommand(newCheckCmd(g))

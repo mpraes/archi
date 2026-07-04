@@ -242,9 +242,10 @@ func (g *goParser) modules() []model.Module {
 		idx, ok := g.modIdx[f.Module]
 		if !ok {
 			g.modulesList = append(g.modulesList, model.Module{
-				Name:    f.Module,
-				Path:    filepath.Dir(f.Path),
-				Imports: map[string]struct{}{},
+				Name:     f.Module,
+				Path:     filepath.Dir(f.Path),
+				Language: "go",
+				Imports:  map[string]struct{}{},
 			})
 			idx = len(g.modulesList) - 1
 			g.modIdx[f.Module] = idx
@@ -305,8 +306,15 @@ func (g *goParser) resolve(p *model.Program) {
 	for i := range p.Modules {
 		byName[p.Modules[i].Name] = &p.Modules[i]
 	}
+	parsed := map[string]struct{}{}
+	for _, f := range g.files {
+		parsed[f.Path] = struct{}{}
+	}
 	for i := range p.Files {
 		f := &p.Files[i]
+		if _, ok := parsed[f.Path]; !ok {
+			continue
+		}
 		for bi := range f.Blocks {
 			b := &f.Blocks[bi]
 			for ci := range b.Calls {

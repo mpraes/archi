@@ -47,7 +47,7 @@ type Result struct {
 // single broken file: warnings are collected and the file is skipped (RNF-003).
 func Parse(root string, opts Options) *Result {
 	root = abs(root)
-	lang := opts.Lang
+	lang := strings.ToLower(strings.TrimSpace(opts.Lang))
 	if lang == "" {
 		lang = detectLang(root)
 	}
@@ -82,19 +82,32 @@ func Parse(root string, opts Options) *Result {
 	})
 
 	// Dispatch by language.
-	var p langParser
 	switch lang {
-	case "go", "":
-		p = &goParser{root: root, modulePath: modulePath, warnings: &res.Warnings}
+	case "go":
+		p := &goParser{root: root, modulePath: modulePath, warnings: &res.Warnings}
+		parseWithSingleParser(res, files, p)
+		res.Program.Modules = p.modules()
+		p.resolve(res.Program)
 	case "ts", "js":
-		// Tree-sitter based parser is the extension point for non-Go targets.
-		res.Warnings = append(res.Warnings, "language "+lang+" requires tree-sitter grammar support (not yet wired); skipping")
-		return res
+		p := &jsTSParser{root: root, warnings: &res.Warnings}
+		parseWithSingleParser(res, files, p)
+		res.Program.Modules = p.modules()
+		p.resolve(res.Program)
+	case "py", "python":
+		p := &pyParser{root: root, warnings: &res.Warnings}
+		parseWithSingleParser(res, files, p)
+		res.Program.Modules = p.modules()
+		p.resolve(res.Program)
+	case "all", "auto", "":
+		parseWithMixedParsers(res, files, root, modulePath)
 	default:
 		res.Warnings = append(res.Warnings, "unsupported language: "+lang)
 		return res
 	}
+	return res
+}
 
+func parseWithSingleParser(res *Result, files []string, p langParser) {
 	for _, f := range files {
 		pf, err := p.parseFile(f)
 		if err != nil {
@@ -103,10 +116,43 @@ func Parse(root string, opts Options) *Result {
 		}
 		res.Program.Files = append(res.Program.Files, pf)
 	}
-	res.Program.Modules = p.modules()
-	// Resolve cross-module calls now that all modules are known.
-	p.resolve(res.Program)
-	return res
+}
+
+func parseWithMixedParsers(res *Result, files []string, root, modulePath string) {
+	jsParser := &jsTSParser{root: root, warnings: &res.Warnings}
+	byLang := map[string]langParser{
+		"go": &goParser{root: root, modulePath: modulePath, warnings: &res.Warnings},
+		"js": jsParser,
+		"ts": jsParser,
+		"py": &pyParser{root: root, warnings: &res.Warnings},
+	}
+	seen := map[langParser]struct{}{}
+	order := []langParser{}
+
+	for _, f := range files {
+		k := langForFile(f)
+		p := byLang[k]
+		if p == nil {
+			continue
+		}
+		if _, ok := seen[p]; !ok {
+			seen[p] = struct{}{}
+			order = append(order, p)
+		}
+		pf, err := p.parseFile(f)
+		if err != nil {
+			res.Warnings = append(res.Warnings, "parse "+f+": "+err.Error())
+			continue
+		}
+		res.Program.Files = append(res.Program.Files, pf)
+	}
+
+	for _, p := range order {
+		res.Program.Modules = append(res.Program.Modules, p.modules()...)
+	}
+	for _, p := range order {
+		p.resolve(res.Program)
+	}
 }
 
 type langParser interface {
@@ -116,29 +162,63 @@ type langParser interface {
 }
 
 func detectLang(root string) string {
-	if fileExists(filepath.Join(root, "go.mod")) {
-		return "go"
-	}
-	if fileExists(filepath.Join(root, "package.json")) {
-		return "ts"
-	}
-	// Fallback: sniff first supported file.
-	var found string
+	hasGo := fileExists(filepath.Join(root, "go.mod"))
+	hasJS := fileExists(filepath.Join(root, "package.json"))
+	hasPy := fileExists(filepath.Join(root, "pyproject.toml")) ||
+		fileExists(filepath.Join(root, "requirements.txt")) ||
+		fileExists(filepath.Join(root, "setup.py"))
+
+	hasTSFiles := false
+	hasJSFiles := false
+	hasPyFiles := false
+	hasGoFiles := false
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 		switch filepath.Ext(path) {
 		case ".go":
-			found = "go"
-			return filepath.SkipAll
+			hasGoFiles = true
 		case ".ts", ".tsx":
-			found = "ts"
-			return filepath.SkipAll
+			hasTSFiles = true
+		case ".js", ".jsx":
+			hasJSFiles = true
+		case ".py":
+			hasPyFiles = true
 		}
 		return nil
 	})
-	return found
+
+	hasGo = hasGo || hasGoFiles
+	hasJS = hasJS || hasJSFiles || hasTSFiles
+	hasPy = hasPy || hasPyFiles
+
+	count := 0
+	if hasGo {
+		count++
+	}
+	if hasJS {
+		count++
+	}
+	if hasPy {
+		count++
+	}
+	if count > 1 {
+		return "all"
+	}
+	if hasGo {
+		return "go"
+	}
+	if hasTSFiles {
+		return "ts"
+	}
+	if hasJS {
+		return "js"
+	}
+	if hasPy {
+		return "py"
+	}
+	return "all"
 }
 
 func abs(p string) string {
@@ -158,7 +238,9 @@ func fileExists(p string) bool {
 func buildSkip(opts Options) []string {
 	def := []string{
 		"node_modules", ".git", "vendor", "dist", "build", "out",
+		"venv", ".venv", "__pycache__",
 		"*_test.go", "*.spec.ts", "*.spec.js", "*.spec.tsx",
+		"*.pyc",
 	}
 	return append(append([]string{}, def...), opts.Exclude...)
 }
@@ -201,14 +283,35 @@ func skipFile(path string, skip []string) bool {
 }
 
 func langMatch(path, lang string) bool {
+	e := strings.ToLower(filepath.Ext(path))
 	switch lang {
 	case "go":
-		return filepath.Ext(path) == ".go"
-	case "ts", "js":
-		e := filepath.Ext(path)
-		return e == ".ts" || e == ".tsx" || e == ".js" || e == ".jsx"
+		return e == ".go"
+	case "ts":
+		return e == ".ts" || e == ".tsx"
+	case "js":
+		return e == ".js" || e == ".jsx"
+	case "py", "python":
+		return e == ".py"
+	case "all", "auto", "":
+		return e == ".go" || e == ".ts" || e == ".tsx" || e == ".js" || e == ".jsx" || e == ".py"
 	}
 	return false
+}
+
+func langForFile(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".go":
+		return "go"
+	case ".ts", ".tsx":
+		return "ts"
+	case ".js", ".jsx":
+		return "js"
+	case ".py":
+		return "py"
+	default:
+		return ""
+	}
 }
 
 func matchGlob(name, pattern string) bool {

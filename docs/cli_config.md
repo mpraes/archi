@@ -1,101 +1,90 @@
-Para o **archi**, o design dos argumentos (args) e flags no CLI deve ser extremamente intuitivo e seguir os padrões de ferramentas consolidadas no ecossistema Linux/Go. O objetivo é que o usuário consiga rodar o app de forma simples, mas com controle total através do terminal.
+# Configuração de CLI (`archi`)
 
-Usando a biblioteca `Cobra`, aqui está o design ideal de comandos, argumentos e flags para o **`archi`**:
+Este documento descreve o comportamento **implementado hoje** no comando `archi`.
 
----
+## Comando principal
 
-## 1. O Comando Principal (Uso Padrão)
-
-O uso mais comum não deve exigir comandos complexos. O argumento principal deve ser apenas o **caminho do diretório** a ser analisado. Se omitido, ele assume o diretório atual (`.`).
+Uso base:
 
 ```bash
-# Analisa o diretório atual e abre o browser
-archi .
-
-# Analisa um projeto em outro caminho
-archi /home/usuario/projetos/meu-app
-
+archi [caminho_do_projeto] [flags]
 ```
 
----
+- `caminho_do_projeto` é opcional; quando omitido, usa `.`.
+- O fluxo padrão faz scan + sobe servidor local + abre navegador (exceto `--no-browser`).
 
-## 2. As Flags Principais (Opções Globais)
+Exemplos:
 
-As flags modificam o comportamento do escaneamento ou ativam recursos específicos.
+```bash
+archi .
+archi /home/usuario/projetos/meu-app
+archi . --no-browser --port 3000
+```
 
-### 🔑 Autenticação e IA
+## Flags globais
 
-* `-a, --ai`: Força ou ativa o modo de insights por IA. (Por padrão, o `archi` pode detectar automaticamente se a variável `GEMINI_API_KEY` existe no ambiente, mas essa flag é útil para forçar o comportamento ou validar a conexão).
-* `--api-key <string>`: Permite passar a chave diretamente pelo comando, caso o usuário não queira (ou não saiba) configurar uma variável de ambiente.
+### IA e autenticação
 
-### 🌐 Comportamento do Servidor/Browser
+- `-a, --ai`  
+  Força a rota de insights por IA a ficar ativa. Se não houver chave, a rota responde indisponível.
 
-* `-p, --port <int>`: Define a porta onde o servidor web local vai rodar. *(Default: `8080`)*. Se a porta 8080 estiver ocupada, o `archi` pode procurar a próxima disponível automaticamente, mas a flag dá controle ao usuário.
-* `--no-browser`: Roda o escaneamento e sobe o servidor, mas **não** abre o navegador automaticamente. Excelente para quem está rodando o app dentro de uma máquina virtual, WSL sem interface gráfica ou SSH.
+- `--api-key <string>`  
+  Chave da API Gemini passada por flag (alternativa ao `GEMINI_API_KEY`).
 
-### 🧹 Filtros de Escopo (Crucial para Performance)
+Comportamento atual da IA:
+- Se `--api-key` ou `GEMINI_API_KEY` existir, IA fica habilitada automaticamente.
+- `--ai` é útil para forçar/validar o fluxo de IA mesmo sem env configurado.
 
-* `-l, --lang <string>`: Força a linguagem do parser (ex: `go`, `ts`, `py`). Útil se o projeto for poliglota e o usuário quiser focar em apenas uma stack. *(Default: Auto-detectar)*.
-* `--exclude <strings>`: Lista de pastas ou padrões para o `archi` ignorar no escaneamento. Por padrão, pastas como `node_modules`, `.git`, `vendor` e arquivos de teste (`*_test.go`, `*.spec.ts`) já devem ser ignoradas automaticamente para poupar memória.
+### Servidor e browser
 
----
+- `-p, --port <int>`  
+  Porta do servidor local. Padrão: `8080`.
 
-## 3. Subcomandos (Para Casos de Uso Avançados)
+- `--no-browser`  
+  Não abre navegador automaticamente.
 
-À medida que o projeto amadurecer, você pode adicionar subcomandos específicos que rodam tarefas sem necessariamente abrir o navegador.
+### Escopo de parsing
+
+- `-l, --lang <string>`  
+  Força linguagem: `go`, `js`, `ts`, `py`, `all`.  
+  Padrão: auto-detecção.
+
+- `--exclude <strings>`  
+  Padrões adicionais para ignorar no scan.
+
+Excludes padrão já aplicados:
+- diretórios: `node_modules`, `.git`, `vendor`, `dist`, `build`, `out`, `venv`, `.venv`, `__pycache__`
+- arquivos: `*_test.go`, `*.spec.ts`, `*.spec.js`, `*.spec.tsx`, `*.pyc`
+
+## Subcomandos
 
 ### `archi export`
 
-Gera um relatório estático das métricas sem abrir o servidor local.
+Gera relatório sem iniciar servidor web.
 
 ```bash
-# Exporta o grafo de acoplamento e conascência para um arquivo JSON estruturado
-archi export --format json > report.json
-
-# Exporta em formato Markdown para colar em um Readme ou documentação interna
+archi export --format json
 archi export --format markdown
-
 ```
 
-### `archi check` (Ideal para CI/CD)
+- `--format`: `json` (padrão) ou `markdown`.
+- Também aceita `md` como alias de markdown.
 
-Roda a análise e retorna um código de saída (`exit code`) de erro caso alguma métrica arquitetural seja violada. Perfeito para colocar no GitHub Actions da empresa e impedir que códigos muito acoplados entrem em produção.
+### `archi check`
+
+Roda análise para uso em CI/CD e falha quando encontrar violação.
 
 ```bash
-# Falha se algum módulo tiver uma Distância da Sequência Principal (D) maior que 0.8
 archi check --max-distance 0.8
-
 ```
 
----
+- `--max-distance` padrão: `0.8`
+- Se houver módulo com `D > limite`, o comando encerra com exit code não-zero.
 
-## Como isso se traduz no Help do Terminal (`archi --help`)
+## Contrato de help
 
-Ao digitar `archi` ou `archi --help`, o `Cobra` vai gerar uma tela limpa e minimalista usando o `Lipgloss` para formatar o texto com cores elegantes:
-
-```text
-Archi - Ferramenta de análise estática e diagnóstico visual de arquitetura de software.
-
-Uso:
-  archi [caminho_do_projeto] [flags]
-  archi [comando]
-
-Comandos Disponíveis:
-  export      Exporta as métricas do projeto (JSON/Markdown)
-  check       Valida limites arquiteturais no pipeline de CI
-
-Flags:
-  -a, --ai                 Ativa os insights do consultor virtual via IA
-      --api-key string     Chave de API do Gemini (alternativa à variável de ambiente)
-  -p, --port int           Porta para o servidor web local (default 8080)
-      --no-browser         Não abre o navegador automaticamente após o escaneamento
-  -l, --lang string        Força uma linguagem específica para o parsing
-      --exclude strings    Pastas ou arquivos adicionais para ignorar
-  -h, --help               Ajuda para o comando archi
-
-Exemplo:
-  archi . --ai --port 3000
-
-```
-
-Este design mantém o comando curto e direto para o dia a dia, mas dá superpoderes para o desenvolvedor avançado que quer automatizar a análise da arquitetura.
+- Root help customizado com `lipgloss`.
+- Subcomandos usam help textual com flags herdadas + locais.
+- Comandos disponíveis atualmente:
+  - `export`
+  - `check`

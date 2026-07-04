@@ -1,6 +1,7 @@
 export interface ModuleMetrics {
   module: string;
   path: string;
+  language: string;
   files: number;
   afferent: number;
   efferent: number;

@@ -1,4 +1,5 @@
 import { Summary } from "./types";
+import { asArray, asBoolean, asNumber, asRecord, asString, asStringArray } from "./types/guards";
 
 export async function fetchMetrics(): Promise<Summary> {
   const res = await fetch("/api/metrics");
@@ -10,8 +11,8 @@ export async function fetchMetrics(): Promise<Summary> {
 export async function isAIEnabled(): Promise<boolean> {
   try {
     const res = await fetch("/api/ai/enabled");
-    const data = await res.json();
-    return data.enabled === true;
+    const data = asRecord(await res.json());
+    return asBoolean(data.enabled);
   } catch {
     return false;
   }
@@ -45,7 +46,7 @@ export async function streamAIInsights(
         else if (line.startsWith("data: ")) data += line.slice(6);
       }
       try {
-        const parsed = JSON.parse(data);
+        const parsed = asString(JSON.parse(data));
         if (event === "chunk") onChunk(parsed);
         else if (event === "error") onError(parsed);
         else if (event === "done") onDone();
@@ -58,13 +59,14 @@ export async function streamAIInsights(
 }
 
 function normalizeSummary(raw: unknown): Summary {
-  const obj = (raw ?? {}) as Record<string, unknown>;
-  const modulesRaw = Array.isArray(obj.modules) ? obj.modules : [];
+  const obj = asRecord(raw);
+  const modulesRaw = asArray(obj.modules);
   const modules = modulesRaw.map((mod): Summary["modules"][number] => {
-    const m = (mod ?? {}) as Record<string, unknown>;
+    const m = asRecord(mod);
     return {
       module: String(m.module ?? ""),
       path: String(m.path ?? ""),
+      language: String(m.language ?? ""),
       files: asNumber(m.files),
       afferent: asNumber(m.afferent),
       efferent: asNumber(m.efferent),
@@ -80,11 +82,12 @@ function normalizeSummary(raw: unknown): Summary {
     };
   });
 
-  const connascenceRaw = Array.isArray(obj.connascence) ? obj.connascence : [];
-  const connascence = connascenceRaw.map((rel) => {
-    const c = (rel ?? {}) as Record<string, unknown>;
+  const connascenceRaw = asArray(obj.connascence);
+  const connascence = connascenceRaw.map((rel): Summary["connascence"][number] => {
+    const c = asRecord(rel);
+    const kind = asConnascenceKind(c.kind);
     return {
-      kind: c.kind === "meaning" ? "meaning" : "name",
+      kind,
       from: String(c.from ?? ""),
       to: String(c.to ?? ""),
       detail: String(c.detail ?? ""),
@@ -100,11 +103,6 @@ function normalizeSummary(raw: unknown): Summary {
   };
 }
 
-function asNumber(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : 0;
-}
-
-function asStringArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((item): item is string => typeof item === "string");
+function asConnascenceKind(v: unknown): Summary["connascence"][number]["kind"] {
+  return v === "meaning" ? "meaning" : "name";
 }

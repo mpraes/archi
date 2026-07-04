@@ -1,18 +1,15 @@
 # archi
 
-> Static code analysis you can actually look at. Point it at a codebase, get an architectural
-> MRI — coupling, instability, abstraction, main-sequence distance, cyclomatic complexity —
-> served in a local web UI built around the main-sequence scatter plot.
+> Static analysis with architectural focus and actionable diagnostics.
 
-`archi` scans a project, computes architectural metrics per module, and renders them in an
-embedded dark-theme UI (D3 scatter plot + side panel). It runs 100% offline by default; an
-optional Gemini enrichment streams in as a second pass and never blocks the initial render.
-For CI it ships a `check` subcommand that exits non-zero on main-sequence violations, so a
-growing codebase can't quietly drift into the "zone of pain" without you noticing.
+`archi` scans a codebase, computes per-module architectural metrics, and serves an embedded
+local dashboard with comparison against the previous scan. It supports Go, JavaScript/TypeScript,
+and Python projects (or mixed repositories) through auto-detection or `--lang`.
 
-- Single static binary, no runtime deps. Go 1.26+, `embed`-ded frontend.
-- Resilient parser: logs and skips syntax-broken files, never aborts the scan.
-- Source code and API keys never leave the machine. The LLM payload carries metrics only.
+- Single static binary (Go 1.26+), with frontend assets embedded via `go:embed`.
+- Resilient parsing: syntax-broken files are warned and skipped, not fatal.
+- Offline-first flow: metrics UI loads immediately; AI insights stream in separately.
+- Privacy by design: AI receives metrics only, never source code.
 
 ## Install
 
@@ -47,7 +44,8 @@ and windows/amd64. Checksums are attached to every release.
 archi .                         # scan current dir, open browser at :8080
 archi /path/to/project --port 3000 --no-browser
 archi . --exclude "internal/migrations,*.pb.go"
-archi . --ai                    # opt-in Gemini insights (needs GEMINI_API_KEY)
+archi . --lang all              # force mixed-language parsing
+archi . --ai                    # force AI path (expects API key)
 ```
 
 Headless modes for scripts and CI:
@@ -55,43 +53,53 @@ Headless modes for scripts and CI:
 ```sh
 archi export --format json     > report.json
 archi export --format markdown > ARCHITECTURE.md
-archi check   --max-distance 0.7   # exits 1 on violation - put this in CI
+archi check   --max-distance 0.8   # exits 1 on violation - put this in CI
 ```
 
 ## Flags
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `-a, --ai` | off | Activate opt-in Gemini insights |
-| `--api-key` | env | Gemini key (alternative to `GEMINI_API_KEY`); never persisted |
+| `-a, --ai` | off | Forces AI insights route; with missing key, API returns unavailable |
+| `--api-key` | env | Gemini key (alternative to `GEMINI_API_KEY`), never persisted |
 | `-p, --port` | 8080 | Local web server port |
 | `--no-browser` | off | Don't auto-open the browser (WSL, SSH, VMs) |
-| `-l, --lang` | auto | Force parser language (`go`, `ts`) |
-| `--exclude` | builtin | Extra globs to skip (defaults already ignore `node_modules`, `.git`, `vendor`, `*_test.go`, `*.spec.ts`) |
+| `-l, --lang` | auto | Force parser language (`go`, `js`, `ts`, `py`, `all`) |
+| `--exclude` | builtin | Extra globs to skip in addition to defaults |
 | `-h, --help`, `--version` | | Built-in |
 
 ## AI enrichment (optional)
 
-The AI path is opt-in and runs as a second pass after metrics are computed:
+The AI path runs as a second pass after metrics are computed:
 
-- Disabled by default. Detector reads `GEMINI_API_KEY` from env (or `--api-key`).
+- Enabled automatically when `GEMINI_API_KEY` or `--api-key` is present.
+- `--ai` forces the AI route to be exposed (useful for validation/debugging).
 - Never blocks the initial UI render — a skeleton shows first, insights stream in.
 - Only metric payloads are sent to the model. **No source code or API keys leave the machine.**
 
+## Supported languages and scope
+
+- **Go**: parsed with stdlib `go/parser` + `go/ast`.
+- **JS/TS**: parsed with Tree-sitter grammars for JavaScript/TypeScript.
+- **Python**: parsed with Tree-sitter Python grammar.
+- **Auto mode** (`--lang` omitted): detects repositories and can parse mixed-language projects.
+
+Built-in excludes include: `node_modules`, `.git`, `vendor`, `dist`, `build`, `out`,
+`venv`, `.venv`, `__pycache__`, `*_test.go`, `*.spec.ts`, `*.spec.js`, `*.spec.tsx`, `*.pyc`.
+
 ## Why this exists
 
-Most "architecture" tooling dumps raw numbers or a static diagram. archi's central view is
-the main-sequence scatter plot (abstraction vs. instability with the balanced line drawn
-through it), so the "zone of pain" and "zone of uselessness" are immediately visible. Pick a
-module in the side panel and you see its coupling, connascence, complexity, and — when AI is
-enabled — a plain-language explanation of what's rigid and what to do about it.
+Most architecture tools expose disconnected metrics. `archi` prioritizes diagnostic flow:
+top-level risk KPIs, comparative deltas from the previous scan, module ranking tables, and a
+visual map (main-sequence chart) as secondary support. Clicking a module opens focused context
+for coupling, connascence, orphan/god blocks, and complexity.
 
 ## Documentation
 
 Full design specs (in Portuguese) live in [`docs/`](./docs):
 
-- [`docs/func_requirements.md`](./docs/func_requirements.md) — RFD-001..012 feature list
-- [`docs/non_func_requirements.md`](./docs/non_func_requirements.md) — RNF-001..009 hard constraints
+- [`docs/func_requirements.md`](./docs/func_requirements.md) — RFD-001..016 feature list
+- [`docs/non_func_requirements.md`](./docs/non_func_requirements.md) — RNF-001..010 hard constraints
 - [`docs/cli_config.md`](./docs/cli_config.md) — CLI surface and flags
 - [`docs/stack.md`](./docs/stack.md) — mandated libraries
 - [`docs/layout.md`](./docs/layout.md) — web UI layout / design principles

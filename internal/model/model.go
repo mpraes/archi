@@ -75,9 +75,10 @@ const (
 
 // Module is a unit of architectural analysis (a package / package directory).
 type Module struct {
-	Name  string // import-path-style or directory-relative name
-	Path  string // filesystem path
-	Files int
+	Name     string // import-path-style or directory-relative name
+	Path     string // filesystem path
+	Language string // go, js, ts, py
+	Files    int
 	// Discovered structure.
 	Imports   map[string]struct{} // internal modules this depends on (efferent)
 	Abstracts int                 // interfaces / signatures
@@ -117,6 +118,7 @@ type Summary struct {
 type ModuleMetrics struct {
 	Module          string   `json:"module"`
 	Path            string   `json:"path"`
+	Language        string   `json:"language"`
 	Files           int      `json:"files"`
 	Afferent        int      `json:"afferent"`
 	Efferent        int      `json:"efferent"`

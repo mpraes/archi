@@ -150,6 +150,9 @@ func Analyze(p *model.Program) model.Summary {
 	// 7. Hotspots: modules in the pain zone (I high & A low) or with god blocks.
 	var hotspots []string
 	for _, m := range p.Modules {
+		if isBoilerplateModule(m) {
+			continue
+		}
 		pain := m.Instability > 0.5 && m.Abstraction < 0.3 && m.Distance > 0.5
 		if pain || len(m.GodBlocks) > 0 {
 			hotspots = append(hotspots, m.Name)
@@ -293,6 +296,7 @@ func buildSummary(p *model.Program, hotspots []string, conns []model.Connascence
 		mods = append(mods, model.ModuleMetrics{
 			Module:          m.Name,
 			Path:            m.Path,
+			Language:        m.Language,
 			Files:           m.Files,
 			Afferent:        m.Afferent,
 			Efferent:        m.Efferent,
@@ -326,4 +330,9 @@ func buildSummary(p *model.Program, hotspots []string, conns []model.Connascence
 func round(f float64) float64 {
 	v := float64(int(f*1000)) / 1000
 	return v
+}
+
+func isBoilerplateModule(m model.Module) bool {
+	needle := strings.ToLower(m.Name + " " + m.Path)
+	return strings.Contains(needle, "template") || strings.Contains(needle, "boilerplate")
 }
