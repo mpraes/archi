@@ -285,16 +285,3 @@ jobs:
           files: |
             dist/archi_*.deb
             dist/archi_*.rpm
-
-      # ---- AUR: publish -bin package ------------------------------------
-      # NOTE: requires AUR_SSH_PRIVATE_KEY, AUR_USER, AUR_EMAIL secrets.
-      - name: Publish AUR -bin
-        if: ${{ secrets.AUR_USER != '' && secrets.AUR_EMAIL != '' && secrets.AUR_SSH_PRIVATE_KEY != '' }}
-        uses: KSXGitHub/github-actions-deploy-aur@v3
-        with:
-          pkgname: archi-bin
-          pkgbuild: packaging/aur/PKGBUILD-bin
-          commit_username: ${{ secrets.AUR_USER }}
-          commit_email: ${{ secrets.AUR_EMAIL }}
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: Update archi-bin to ${{ steps.ver.outputs.version }}
