@@ -11,9 +11,6 @@ description: |
   complexity) and serves an embedded web UI locally for visual diagnosis.
 homepage: https://github.com/mpraes/archi
 license: MIT
-formats:
-  - deb
-  - rpm
 contents:
   - src: ./dist/archi
     dst: /usr/bin/archi
