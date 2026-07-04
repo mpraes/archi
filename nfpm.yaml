@@ -1,0 +1,19 @@
+name: archi
+arch: amd64
+platform: linux
+version: ${VERSION}
+version_schema: semver
+section: devel
+maintainer: mpraes
+description: |
+  Static-analysis CLI that parses a codebase, computes architectural metrics
+  (coupling, instability, abstraction, main-sequence distance, cyclomatic
+  complexity) and serves an embedded web UI locally for visual diagnosis.
+homepage: https://github.com/mpraes/archi
+license: MIT
+formats:
+  - deb
+  - rpm
+contents:
+  - src: ./dist/archi
+    dst: /usr/bin/archi

@@ -1,0 +1,369 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version override (e.g. v0.1.0). Must match a CHANGELOG.md section.'
+        required: false
+        type: string
+
+env:
+  GO_VERSION: '1.26.3'
+  NODE_VERSION: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # CI: runs on every push and PR. Common ground — fmt, vet, security, tests.
+  # ---------------------------------------------------------------------------
+  ci:
+    name: Lint / Test / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend (embedded into binary via go:embed)
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: gofmt check
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt would reformat:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+      - name: Build binary
+        run: go build -o archi ./cmd/archi
+
+      - name: Smoke test (export json)
+        run: ./archi export --format json > /dev/null
+
+      - name: Smoke test (check CI gate)
+        run: ./archi check --max-distance 0.7 || true
+
+  # ---------------------------------------------------------------------------
+  # BUILD MATRIX: compile once per (os, arch) on the native runner, package
+  # each as a tarball + sha256. Downstream jobs reuse these artifacts.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.os }}/${{ matrix.arch }}
+    needs: ci
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.version != '')
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-22.04
+            archive: tar.gz
+          - os: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            archive: tar.gz
+          - os: darwin
+            arch: amd64
+            runner: macos-13
+            archive: tar.gz
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+            archive: tar.gz
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          v="${{ inputs.version }}"
+          if [ -z "$v" ]; then v="${GITHUB_REF##refs/tags/}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "num=${v#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build static binary
+        shell: bash
+        env:
+          CGO_ENABLED: '0'
+          LDFLAGS: -s -w -X main.version=${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p staging
+          ext=""
+          [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          go build -ldflags "$LDFLAGS" -trimpath -o "staging/archi${ext}" ./cmd/archi
+
+      - name: Pack archive
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          OS: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          name="archi-${VERSION}-${OS}-${ARCH}"
+          mkdir -p "out/${name}"
+          cp -r staging/* "out/${name}/"
+          # mise-friendly: ship the LICENSE + a tiny README next to the binary
+          [ -f LICENSE ] && cp LICENSE "out/${name}/" || true
+          cd out
+          if [ "$ARCHIVE" = "zip" ]; then
+            7z a "${name}.${ARCHIVE}" "${name}"
+          else
+            tar -czf "${name}.${ARCHIVE}" "${name}"
+          fi
+          sha256sum "${name}.${ARCHIVE}" > "${name}.${ARCHIVE}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-${{ matrix.os }}-${{ matrix.arch }}
+          path: out/archi-*.*.*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # RELEASE: download every artifact, slice the CHANGELOG, create the GitHub
+  # Release with notes + checksums, then fan out to nfpm / Homebrew tap / AUR.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          v="${{ inputs.version }}"
+          if [ -z "$v" ]; then v="${GITHUB_REF##refs/tags/}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "num=${v#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version has a CHANGELOG section
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          header=$(grep -E "^## \[${VERSION#v}\]" CHANGELOG.md || true)
+          if [ -z "$header" ]; then
+            echo "::error::No '## [${VERSION#v}]' section in CHANGELOG.md"
+            exit 1
+          fi
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: artifact-*
+          merge-multiple: true
+
+      - name: Assemble checksums file
+        working-directory: dist
+        run: cat archi-*.sha256 | sort -u > checksums.txt
+
+      - name: Slice CHANGELOG section for this version
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          awk -v ver="${VERSION#v}" '
+            BEGIN { hdr = "## [" ver "]" }
+            index($0, hdr) == 1 { flag=1; next }
+            flag && index($0, "## [") == 1 { exit }
+            flag { print }
+          ' CHANGELOG.md > changelog_section.md
+
+      - name: Compose release body
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          {
+            cat changelog_section.md
+            echo
+            echo "## Install"
+            echo
+            echo '### Homebrew'
+            echo '```sh'
+            echo 'brew tap mpraes/tap'
+            echo 'brew install archi'
+            echo '```'
+            echo
+            echo '### AUR (Arch)'
+            echo '```sh'
+            echo 'yay -S archi-bin'
+            echo '```'
+            echo
+            echo '### mise (auto, version-pinned)'
+            echo '```sh'
+            echo 'mise use -g github:mpraes/archi@'"$VERSION"
+            echo '```'
+            echo
+            echo '### Direct download'
+            echo '```sh'
+            echo 'curl -fsSL https://github.com/mpraes/archi/releases/download/'"$VERSION"'/archi-'"$VERSION"'-linux-amd64.tar.gz | tar xz'
+            echo '```'
+            echo
+            echo '### DEB / RPM'
+            echo 'Grab `archi_'"${VERSION#v}"'_amd64.deb` or `archi_'"${VERSION#v}"'_amd64.rpm` from the assets below.'
+            echo
+            echo '## SHA256'
+            echo
+            echo '```'
+            cat dist/checksums.txt
+            echo '```'
+          } > release_body.md
+
+      - name: Create GitHub Release
+        id: ghrel
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
+          body_path: release_body.md
+          files: |
+            dist/archi-*.tar.gz
+            dist/archi-*.zip
+            dist/checksums.txt
+          fail_on_unmatched_files: true
+
+      # ---- nfpm: ship the same Linux/amd64 binary as .deb and .rpm ------
+      - name: Install nfpm
+        run: |
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.41.0/nfpm_2.41.0_Linux_x86_64.tar.gz \
+            | tar xz -C /usr/local/bin nfpm
+
+      - name: Extract linux/amd64 binary for nfpm
+        working-directory: dist
+        run: |
+          mkdir -p nfpm-stage
+          tar -xzf archi-${{ steps.ver.outputs.version }}-linux-amd64.tar.gz -C nfpm-stage
+          cp nfpm-stage/archi-*/archi ./archi
+
+      - name: Build DEB and RPM
+        env:
+          VERSION: ${{ steps.ver.outputs.num }}
+        run: |
+          nfpm pkg --config nfpm.yaml --packager deb --target dist/archi_${VERSION}_amd64.deb
+          nfpm pkg --config nfpm.yaml --packager rpm --target dist/archi_${VERSION}_amd64.rpm
+
+      - name: Upload DEB/RPM to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          files: |
+            dist/archi_*.deb
+            dist/archi_*.rpm
+
+      # ---- Homebrew tap: bump formula with new URL + sha256 --------------
+      - name: Bump Homebrew tap formula
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          NUM: ${{ steps.ver.outputs.num }}
+        run: |
+          : "${HOMEBREW_TAP_TOKEN:?secret HOMEBREW_TAP_TOKEN is required}"
+          git clone --depth=1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/mpraes/homebrew-tap.git" tap
+          cd tap
+          ARM_URL="https://github.com/mpraes/archi/releases/download/${VERSION}/archi-${VERSION}-darwin-arm64.tar.gz"
+          ARM_SHA=$(awk '{print $1}' "../dist/archi-${VERSION}-darwin-arm64.tar.gz.sha256")
+          AMD_URL="https://github.com/mpraes/archi/releases/download/${VERSION}/archi-${VERSION}-darwin-amd64.tar.gz"
+          AMD_SHA=$(awk '{print $1}' "../dist/archi-${VERSION}-darwin-amd64.tar.gz.sha256")
+          mkdir -p Formula
+          cat > Formula/archi.rb <<EOF
+          class Archi < Formula
+            desc "Static-analysis CLI that computes architectural metrics and serves a local web UI"
+            homepage "https://github.com/mpraes/archi"
+            version "${NUM}"
+            license "MIT"
+          on_macos do
+            on_arm do
+              url "${ARM_URL}"
+              sha256 "${ARM_SHA}"
+            end
+            on_intel do
+              url "${AMD_URL}"
+              sha256 "${AMD_SHA}"
+            end
+          end
+          def install
+            bin.install "archi"
+          end
+          end
+          EOF
+          sed -i 's/^          //' Formula/archi.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/archi.rb
+          git commit -m "archi ${VERSION}"
+          git push
+
+      # ---- AUR: publish -bin package ------------------------------------
+      - name: Publish AUR -bin
+        if: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
+        uses: KSXGitHub/github-actions-deploy-aur@v3
+        with:
+          pkgname: archi-bin
+          pkgbuild: packaging/aur/PKGBUILD-bin
+          commit_username: ${{ secrets.AUR_USER }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update archi-bin to ${{ steps.ver.outputs.version }}

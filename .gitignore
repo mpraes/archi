@@ -1,0 +1,6 @@
+/archi
+*.exe
+*.test
+web/node_modules/
+web/dist/assets/
+.env

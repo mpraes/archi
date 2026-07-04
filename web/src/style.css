@@ -1,0 +1,88 @@
+:root {
+  --bg: #0e1117;
+  --panel: #151a24;
+  --text: #c9d1d9;
+  --muted: #8b93a7;
+  --accent: #58a6ff;
+  --danger: #ff5d5d;
+  --warn: #ffd166;
+  --ok: #8ddc8d;
+  --line: #232a36;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app { max-width: 1180px; margin: 0 auto; padding: 24px; }
+
+.status {
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+#chart {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.dot { transition: r 120ms ease; }
+.dot:hover { stroke: var(--accent); stroke-width: 2; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 14px;
+}
+.panel.empty .hint { color: var(--muted); }
+.panel h2 { margin: 0 0 4px; font-size: 18px; }
+.panel code { color: var(--muted); font-size: 12px; word-break: break-all; }
+.panel h3 { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+.panel ul { margin: 0; padding-left: 18px; }
+.panel .m { color: var(--muted); }
+.panel small { color: var(--muted); }
+
+.ai {
+  margin-top: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+.ai h3 { margin-top: 0; }
+.skeleton {
+  color: var(--muted);
+  background: linear-gradient(90deg, #1a202c 25%, #232b3a 50%, #1a202c 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  padding: 10px;
+  border-radius: 6px;
+  min-height: 60px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.hidden { display: none; }
+
+@media (max-width: 880px) {
+  .main { grid-template-columns: 1fr; }
+}
