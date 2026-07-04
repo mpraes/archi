@@ -94,22 +94,6 @@ jobs:
             arch: amd64
             runner: ubuntu-22.04
             archive: tar.gz
-          - os: linux
-            arch: arm64
-            runner: ubuntu-22.04-arm
-            archive: tar.gz
-          - os: darwin
-            arch: amd64
-            runner: macos-13
-            archive: tar.gz
-          - os: darwin
-            arch: arm64
-            runner: macos-latest
-            archive: tar.gz
-          - os: windows
-            arch: amd64
-            runner: windows-latest
-            archive: zip
     steps:
       - uses: actions/checkout@v4
         with:
@@ -247,22 +231,6 @@ jobs:
             echo
             echo "## Install"
             echo
-            echo '### Homebrew'
-            echo '```sh'
-            echo 'brew tap mpraes/tap'
-            echo 'brew install archi'
-            echo '```'
-            echo
-            echo '### AUR (Arch)'
-            echo '```sh'
-            echo 'yay -S archi-bin'
-            echo '```'
-            echo
-            echo '### mise (auto, version-pinned)'
-            echo '```sh'
-            echo 'mise use -g github:mpraes/archi@'"$VERSION"
-            echo '```'
-            echo
             echo '### Direct download'
             echo '```sh'
             echo 'curl -fsSL https://github.com/mpraes/archi/releases/download/'"$VERSION"'/archi-'"$VERSION"'-linux-amd64.tar.gz | tar xz'
@@ -287,7 +255,6 @@ jobs:
           body_path: release_body.md
           files: |
             dist/archi-*.tar.gz
-            dist/archi-*.zip
             dist/checksums.txt
           fail_on_unmatched_files: true
 
@@ -318,51 +285,6 @@ jobs:
           files: |
             dist/archi_*.deb
             dist/archi_*.rpm
-
-      # ---- Homebrew tap: bump formula with new URL + sha256 --------------
-      # NOTE: requires HOMEBREW_TAP_TOKEN secret on the repo. If absent, step fails
-      # and the formula needs manual updating in mpraes/homebrew-tap.
-      - name: Bump Homebrew tap formula
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ steps.ver.outputs.version }}
-          NUM: ${{ steps.ver.outputs.num }}
-        run: |
-          : "${HOMEBREW_TAP_TOKEN:?secret HOMEBREW_TAP_TOKEN is required}"
-          git clone --depth=1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/mpraes/homebrew-tap.git" tap
-          cd tap
-          ARM_URL="https://github.com/mpraes/archi/releases/download/${VERSION}/archi-${VERSION}-darwin-arm64.tar.gz"
-          ARM_SHA=$(awk '{print $1}' "../dist/archi-${VERSION}-darwin-arm64.tar.gz.sha256")
-          AMD_URL="https://github.com/mpraes/archi/releases/download/${VERSION}/archi-${VERSION}-darwin-amd64.tar.gz"
-          AMD_SHA=$(awk '{print $1}' "../dist/archi-${VERSION}-darwin-amd64.tar.gz.sha256")
-          mkdir -p Formula
-          cat > Formula/archi.rb <<EOF
-          class Archi < Formula
-            desc "Static-analysis CLI that computes architectural metrics and serves a local web UI"
-            homepage "https://github.com/mpraes/archi"
-            version "${NUM}"
-            license "MIT"
-          on_macos do
-            on_arm do
-              url "${ARM_URL}"
-              sha256 "${ARM_SHA}"
-            end
-            on_intel do
-              url "${AMD_URL}"
-              sha256 "${AMD_SHA}"
-            end
-          end
-          def install
-            bin.install "archi"
-          end
-          end
-          EOF
-          sed -i 's/^          //' Formula/archi.rb
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/archi.rb
-          git commit -m "archi ${VERSION}"
-          git push
 
       # ---- AUR: publish -bin package ------------------------------------
       # NOTE: requires AUR_SSH_PRIVATE_KEY, AUR_USER, AUR_EMAIL secrets.
