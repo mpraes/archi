@@ -32,6 +32,7 @@ func NewRootCmd(version string) *cobra.Command {
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    func(cmd *cobra.Command, args []string) error { return runRoot(cmd, args, g) },
 	}
+	attachStyledHelp(root)
 	root.Flags().BoolVarP(&g.AIPresent, "ai", "a", false, "Ativa os insights do consultor virtual via IA")
 	root.Flags().StringVar(&g.APIKey, "api-key", "", "Chave de API do Gemini (alternativa à variável de ambiente)")
 	root.Flags().IntVarP(&g.Port, "port", "p", 8080, "Porta para o servidor web local")
