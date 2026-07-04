@@ -2,7 +2,9 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -15,13 +17,52 @@ import (
 func OpenBrowser(url string) error {
 	switch runtime.GOOS {
 	case "linux":
-		return exec.Command("xdg-open", url).Start()
+		return openBrowserLinux(url)
 	case "darwin":
 		return exec.Command("open", url).Start()
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	}
 	return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+}
+
+func openBrowserLinux(url string) error {
+	var cmds [][]string
+	if isWSL() {
+		// Prefer WSL-native bridges first when available.
+		cmds = append(cmds, []string{"wslview", url}, []string{"explorer.exe", url})
+	}
+	cmds = append(cmds, []string{"xdg-open", url})
+
+	var errs []string
+	for _, c := range cmds {
+		if _, err := exec.LookPath(c[0]); err != nil {
+			errs = append(errs, c[0]+" not found")
+			continue
+		}
+		if err := exec.Command(c[0], c[1:]...).Start(); err == nil {
+			return nil
+		} else {
+			errs = append(errs, c[0]+": "+err.Error())
+		}
+	}
+
+	joined := strings.Join(errs, "; ")
+	if joined == "" {
+		joined = "no browser launcher available"
+	}
+	return errors.New(joined)
+}
+
+func isWSL() bool {
+	if os.Getenv("WSL_DISTRO_NAME") != "" || os.Getenv("WSL_INTEROP") != "" {
+		return true
+	}
+	b, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(b)), "microsoft")
 }
 
 // Spinner prints a minimal animated spinner with a label to stderr (RNF-006).
@@ -69,9 +110,4 @@ func (s *Spinner) Stop() {
 		close(s.stop)
 	}
 	<-s.done
-}
-
-func init() {
-	// silence unused import warning if exec path changes
-	_ = strings.TrimSpace
 }

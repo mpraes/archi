@@ -284,6 +284,12 @@ func buildSummary(p *model.Program, hotspots []string, conns []model.Connascence
 	for _, m := range p.Modules {
 		orphan := m.OrphanBlocks
 		gods := m.GodBlocks
+		if orphan == nil {
+			orphan = []string{}
+		}
+		if gods == nil {
+			gods = []string{}
+		}
 		mods = append(mods, model.ModuleMetrics{
 			Module:          m.Name,
 			Path:            m.Path,
@@ -302,6 +308,12 @@ func buildSummary(p *model.Program, hotspots []string, conns []model.Connascence
 		})
 	}
 	sort.Slice(mods, func(i, j int) bool { return mods[i].Module < mods[j].Module })
+	if hotspots == nil {
+		hotspots = []string{}
+	}
+	if conns == nil {
+		conns = []model.Connascence{}
+	}
 	return model.Summary{
 		ProjectName: p.ProjectName,
 		ModuleCount: len(mods),

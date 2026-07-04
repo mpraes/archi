@@ -3,7 +3,8 @@ import { Summary } from "./types";
 export async function fetchMetrics(): Promise<Summary> {
   const res = await fetch("/api/metrics");
   if (!res.ok) throw new Error("falha ao carregar métricas");
-  return res.json();
+  const raw = await res.json();
+  return normalizeSummary(raw);
 }
 
 export async function isAIEnabled(): Promise<boolean> {
@@ -54,4 +55,56 @@ export async function streamAIInsights(
     }
   }
   onDone();
+}
+
+function normalizeSummary(raw: unknown): Summary {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const modulesRaw = Array.isArray(obj.modules) ? obj.modules : [];
+  const modules = modulesRaw.map((mod): Summary["modules"][number] => {
+    const m = (mod ?? {}) as Record<string, unknown>;
+    return {
+      module: String(m.module ?? ""),
+      path: String(m.path ?? ""),
+      files: asNumber(m.files),
+      afferent: asNumber(m.afferent),
+      efferent: asNumber(m.efferent),
+      instability: asNumber(m.instability),
+      abstraction: asNumber(m.abstraction),
+      distance: asNumber(m.distance),
+      maxComplexity: asNumber(m.maxComplexity),
+      totalComplexity: asNumber(m.totalComplexity),
+      abstracts: asNumber(m.abstracts),
+      concretes: asNumber(m.concretes),
+      orphanBlocks: asStringArray(m.orphanBlocks),
+      godBlocks: asStringArray(m.godBlocks),
+    };
+  });
+
+  const connascenceRaw = Array.isArray(obj.connascence) ? obj.connascence : [];
+  const connascence = connascenceRaw.map((rel) => {
+    const c = (rel ?? {}) as Record<string, unknown>;
+    return {
+      kind: c.kind === "meaning" ? "meaning" : "name",
+      from: String(c.from ?? ""),
+      to: String(c.to ?? ""),
+      detail: String(c.detail ?? ""),
+    };
+  });
+
+  return {
+    projectName: String(obj.projectName ?? ""),
+    moduleCount: asNumber(obj.moduleCount),
+    modules,
+    connascence,
+    hotspots: asStringArray(obj.hotspots),
+  };
+}
+
+function asNumber(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((item): item is string => typeof item === "string");
 }

@@ -32,8 +32,12 @@ async function main() {
 
 function renderStatus(s: Summary) {
   const hot = s.hotspots.length;
-  let label = "Saudável";
-  if (hot > 0) label = `${hot} hotspot${hot > 1 ? "s" : ""} crítico${hot > 1 ? "s" : ""}`;
+  if (s.moduleCount === 0) {
+    document.getElementById("status")!.innerHTML =
+      `📊 <strong>Status da Arquitetura:</strong> nenhum módulo foi identificado neste scan. ` +
+      `Se o projeto for JS/TS, o parser ainda não está implementado nesta versão.`;
+    return;
+  }
   document.getElementById("status")!.innerHTML =
     `📊 <strong>Status da Arquitetura:</strong> Seu projeto possui ` +
     `<strong>${s.moduleCount} módulos</strong>. O design está predominantemente ` +
@@ -43,6 +47,12 @@ function renderStatus(s: Summary) {
 
 function renderChart(s: Summary) {
   const chart = d3.select("#chart");
+  if (s.modules.length === 0) {
+    chart.append("div")
+      .attr("class", "hint")
+      .text("Nenhum módulo detectado para desenhar o mapa. Tente um projeto Go ou force --lang go.");
+    return;
+  }
   const width = chart.node()!.getBoundingClientRect().width;
   const height = 460;
   const margin = { top: 20, right: 20, bottom: 40, left: 50 };
@@ -132,8 +142,8 @@ function selectModule(m: ModuleMetrics) {
         <li><span class="m">Complexidade máx</span> <b>${m.maxComplexity}</b> (total ${m.totalComplexity})</li>
       </ul>
     </section>
-    ${m.godBlocks?.length ? section("Funções God", m.godBlocks) : ""}
-    ${m.orphanBlocks?.length ? section("Código órfão", m.orphanBlocks) : ""}
+    ${m.godBlocks.length ? section("Funções God", m.godBlocks) : ""}
+    ${m.orphanBlocks.length ? section("Código órfão", m.orphanBlocks) : ""}
     ${conns.length ? connSection(conns, m.module) : ""}
   `;
 }

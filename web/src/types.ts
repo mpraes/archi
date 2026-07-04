@@ -11,8 +11,8 @@ export interface ModuleMetrics {
   totalComplexity: number;
   abstracts: number;
   concretes: number;
-  orphanBlocks: string[] | null;
-  godBlocks: string[] | null;
+  orphanBlocks: string[];
+  godBlocks: string[];
 }
 
 export interface Connascence {
