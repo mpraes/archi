@@ -16,8 +16,8 @@ type goParser struct {
 	modulePath string
 	warnings   *[]string
 
-	files []model.File
-	modIdx map[string]int // module name -> index in modules slice
+	files       []model.File
+	modIdx      map[string]int // module name -> index in modules slice
 	modulesList []model.Module
 }
 
@@ -69,9 +69,9 @@ func (g *goParser) scan(fset *token.FileSet, f *ast.File, path string) ([]model.
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
 			b := model.Block{
-				Name:       d.Name.Name,
-				StartLine:  fset.Position(d.Pos()).Line,
-				EndLine:    fset.Position(d.End()).Line,
+				Name:      d.Name.Name,
+				StartLine: fset.Position(d.Pos()).Line,
+				EndLine:   fset.Position(d.End()).Line,
 			}
 			if d.Recv != nil && len(d.Recv.List) > 0 {
 				b.Kind = model.BlockMethod

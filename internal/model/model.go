@@ -75,9 +75,9 @@ const (
 
 // Module is a unit of architectural analysis (a package / package directory).
 type Module struct {
-	Name      string // import-path-style or directory-relative name
-	Path      string // filesystem path
-	Files     int
+	Name  string // import-path-style or directory-relative name
+	Path  string // filesystem path
+	Files int
 	// Discovered structure.
 	Imports   map[string]struct{} // internal modules this depends on (efferent)
 	Abstracts int                 // interfaces / signatures
@@ -85,21 +85,21 @@ type Module struct {
 	MaxCyclo  int
 	SumCyclo  int
 	// Computed metrics (set by analyzer).
-	Afferent    int
-	Efferent    int
-	Instability float64
-	Abstraction float64
-	Distance    float64
-	Connascence []Connascence
+	Afferent     int
+	Efferent     int
+	Instability  float64
+	Abstraction  float64
+	Distance     float64
+	Connascence  []Connascence
 	OrphanBlocks []string
 	GodBlocks    []string
 }
 
 // Connascence between two modules.
 type Connascence struct {
-	Kind   string `json:"kind"`   // "name" (CoN) or "meaning" (CoM)
-	From   string `json:"from"`   // module owning the dependent block
-	To     string `json:"to"`     // module owning the dependency target
+	Kind   string `json:"kind"` // "name" (CoN) or "meaning" (CoM)
+	From   string `json:"from"` // module owning the dependent block
+	To     string `json:"to"`   // module owning the dependency target
 	Detail string `json:"detail"`
 }
 
@@ -109,7 +109,7 @@ type Summary struct {
 	ProjectName string          `json:"projectName"`
 	ModuleCount int             `json:"moduleCount"`
 	Modules     []ModuleMetrics `json:"modules"`
-	Connascence []Connascence  `json:"connascence"`
+	Connascence []Connascence   `json:"connascence"`
 	Hotspots    []string        `json:"hotspots"`
 }
 

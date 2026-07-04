@@ -220,9 +220,9 @@ func connascenceName(p *model.Program, byName map[string]*model.Module) []model.
 // different modules (ocult meaning dependency on a magic value).
 func connascenceMeaning(p *model.Program, byName map[string]*model.Module) []model.Connascence {
 	type occ struct {
-		mod   string
-		file  string
-		line  int
+		mod  string
+		file string
+		line int
 	}
 	// Group literals by value; only consider non-trivial strings/numbers.
 	// Exclude short strings (<=1 char) and zero.

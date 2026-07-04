@@ -107,10 +107,10 @@ func systemPrompt() string {
 func buildPrompt(s model.Summary) string {
 	// Serialize only metrics topology — no source code (RNF-009).
 	payload := struct {
-		Project  string                  `json:"project"`
-		Modules  []model.ModuleMetrics   `json:"modules"`
-		Hotspots []string                `json:"hotspots"`
-		Connasc  []model.Connascence     `json:"connascence"`
+		Project  string                `json:"project"`
+		Modules  []model.ModuleMetrics `json:"modules"`
+		Hotspots []string              `json:"hotspots"`
+		Connasc  []model.Connascence   `json:"connascence"`
 	}{
 		Project:  s.ProjectName,
 		Modules:  s.Modules,

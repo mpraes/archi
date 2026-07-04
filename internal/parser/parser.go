@@ -32,14 +32,14 @@ func readGoModulePath(root string) string {
 
 // Options controls a parse run.
 type Options struct {
-	Lang    string   // force language; "" auto-detect
-	Exclude []string // extra glob/dir patterns to skip
-	ModulePath string // resolved module path (for Go)
+	Lang       string   // force language; "" auto-detect
+	Exclude    []string // extra glob/dir patterns to skip
+	ModulePath string   // resolved module path (for Go)
 }
 
 // Result of a parse run plus any per-file warnings (never fatal).
 type Result struct {
-	Program *model.Program
+	Program  *model.Program
 	Warnings []string
 }
 
