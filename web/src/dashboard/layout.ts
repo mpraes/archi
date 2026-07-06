@@ -197,6 +197,7 @@ function updateWorkspaceTitle(targetId: string, linksByTarget: Map<string, HTMLA
   const label = links?.[0]?.textContent?.trim();
   if (!label) return;
   title.textContent = label;
+  document.title = `${label} | Archi`;
 }
 
 function setActiveNavTarget(linksByTarget: Map<string, HTMLAnchorElement[]>, targetId: string): void {

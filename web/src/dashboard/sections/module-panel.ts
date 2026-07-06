@@ -11,18 +11,20 @@ export function renderModulePanel(summary: Summary, module: ModuleMetrics): void
 
   panel.innerHTML = `
     <header><h2>${last}</h2><code>${module.module}</code></header>
-    <section>
-      <h3>What is rigid here</h3>
-      <ul>
-        <li><span class="m">Outgoing dependencies</span> <b>${module.efferent}</b> modules</li>
-        <li><span class="m">Incoming dependencies</span> <b>${module.afferent}</b> modules depend on it</li>
-        <li><span class="m">Abstraction ratio</span> ${pct(module.abstracts, module.abstracts + module.concretes)}</li>
-        <li><span class="m">Max complexity</span> <b>${module.maxComplexity}</b> (total ${module.totalComplexity})</li>
-      </ul>
-    </section>
-    ${module.godBlocks.length ? section("God functions", module.godBlocks) : ""}
-    ${module.orphanBlocks.length ? section("Orphan code", module.orphanBlocks) : ""}
-    ${conns.length ? connSection(conns, module.module) : ""}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 16px;">
+      <section>
+        <h3>What is rigid here</h3>
+        <ul>
+          <li><span class="m">Outgoing dependencies</span> <b>${module.efferent}</b> modules</li>
+          <li><span class="m">Incoming dependencies</span> <b>${module.afferent}</b> modules depend on it</li>
+          <li><span class="m">Abstraction ratio</span> ${pct(module.abstracts, module.abstracts + module.concretes)}</li>
+          <li><span class="m">Max complexity</span> <b>${module.maxComplexity}</b> (total ${module.totalComplexity})</li>
+        </ul>
+      </section>
+      ${module.godBlocks.length ? section("God functions", module.godBlocks) : ""}
+      ${module.orphanBlocks.length ? section("Orphan code", module.orphanBlocks) : ""}
+      ${conns.length ? connSection(conns, module.module) : ""}
+    </div>
   `;
   requestNavigation("report");
   panel.focus();
