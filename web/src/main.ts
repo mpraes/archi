@@ -12,6 +12,17 @@ type ConnLineDatum = {
   from: ModuleMetrics;
   to: ModuleMetrics;
 };
+type ChartPalette = {
+  bg: string;
+  axis: string;
+  mainSequence: string;
+  connName: string;
+  connMeaning: string;
+  dotStroke: string;
+  riskHigh: string;
+  riskMid: string;
+  riskLow: string;
+};
 type MetricDelta = { current: number; previous: number | null; delta: number | null };
 type Snapshot = {
   capturedAt: string;
@@ -45,9 +56,23 @@ type ModuleDelta = {
 };
 
 const SNAPSHOT_KEY = "archi:summary:last-v1";
+const CHART_MIN_WIDTH = 320;
+let chartResizeObserver: ResizeObserver | null = null;
+let chartResizeRaf: number | null = null;
+let chartResizeHandler: (() => void) | null = null;
+let chartOrientationHandler: (() => void) | null = null;
+let chartToggleHandler: (() => void) | null = null;
+let chartDetailsElement: HTMLDetailsElement | null = null;
 
 async function main() {
   const app = requiredEl<HTMLElement>("app");
+  const navItems = ["Resumo", "Módulos", "Conascência", "Risco", "Histórico"];
+  const navLinks = navItems
+    .map(
+      (label, index) =>
+        `<a ${index === 0 ? 'class="active" aria-current="page"' : ""} href="#">${label}</a>`,
+    )
+    .join("");
   app.innerHTML = `
     <div class="dashboard-shell">
       <aside class="sidebar">
@@ -55,24 +80,23 @@ async function main() {
           <h1>Archi</h1>
           <p>Painel Analítico</p>
         </div>
-        <nav class="side-nav">
-          <a class="active" href="#">Resumo</a>
-          <a href="#">Módulos</a>
-          <a href="#">Conascência</a>
-          <a href="#">Risco</a>
-          <a href="#">Histórico</a>
+        <nav class="side-nav" aria-label="Navegação principal">
+          ${navLinks}
         </nav>
       </aside>
       <main class="workspace">
         <header class="topbar">
           <div>
             <h2>Dashboard</h2>
-            <p id="status">Carregando diagnóstico…</p>
+            <p id="status" role="status" aria-live="polite">Carregando diagnóstico…</p>
           </div>
           <div class="top-actions">
             <span id="history-badge" class="badge">Sem baseline</span>
           </div>
         </header>
+        <nav class="compact-nav" aria-label="Navegação principal">
+          ${navLinks}
+        </nav>
         <section id="hero" class="hero"></section>
         <section id="kpi-grid" class="kpi-grid"></section>
         <section class="main">
@@ -86,8 +110,8 @@ async function main() {
             </div>
           </div>
           <aside class="main-right">
-            <section id="activity" class="panel activity"></section>
-            <section id="panel" class="panel empty">
+            <section id="activity" class="panel activity" aria-live="polite"></section>
+            <section id="panel" class="panel empty" role="region" aria-live="polite" tabindex="-1">
               <p class="hint">Clique em um módulo na tabela (ou no mapa) para ver o diagnóstico.</p>
             </section>
           </aside>
@@ -109,6 +133,7 @@ async function main() {
   renderKpiGrid(data, previousSnapshot);
   renderActivity(data, previousSnapshot);
   renderChart(data);
+  setupChartResponsiveness(data);
   renderDetailedReport(data, previousSnapshot);
   renderAI(data);
   saveSnapshot(buildSnapshot(data));
@@ -136,15 +161,37 @@ function renderHero(s: Summary, previousSnapshot: Snapshot | null): void {
     ? Object.values(previousSnapshot.modules).filter((m) => m.godCount > 0 || m.orphanCount > 0).length
     : null;
   const riskDelta = previousRiskModules === null ? null : riskModules - previousRiskModules;
+  const riskSummary = riskModules === 1 ? "1 módulo em risco" : `${riskModules} módulos em risco`;
+  const baselineSummary =
+    riskDelta === null
+      ? "Sem baseline"
+      : riskDelta > 0
+        ? `Atenção: +${riskDelta} vs anterior`
+        : riskDelta < 0
+          ? `Melhorou ${Math.abs(riskDelta)} vs anterior`
+          : "Sem mudança vs anterior";
   hero.innerHTML = `
-    <div>
+    <div class="hero-intro">
       <h3>Visão geral da arquitetura</h3>
-      <p>Dados essenciais em foco para diagnóstico rápido e comparação contínua.</p>
+      <p>Foque primeiro no que aumentou risco estrutural e depois avance para o detalhamento por módulo.</p>
     </div>
-    <div class="hero-metrics">
-      <article><span>Módulos em risco</span><strong>${riskModules}</strong><small class="${deltaClass(riskDelta)}">${riskDelta === null ? "Sem baseline" : `Δ ${formatSigned(riskDelta, 0)} vs anterior`}</small></article>
-      <article><span>Conascências totais</span><strong>${s.connascence.length}</strong><small>${dominantConnascenceLabel(s.connascence)}</small></article>
-      <article><span>Projeto</span><strong>${s.projectName || "Atual"}</strong><small>${new Date().toLocaleDateString("pt-BR")}</small></article>
+    <div class="hero-priority">
+      <article class="hero-main-metric">
+        <span>Prioridade atual</span>
+        <strong>${riskSummary}</strong>
+        <small class="${deltaClass(riskDelta)}">${baselineSummary}</small>
+      </article>
+      <ul class="hero-secondary">
+        <li>
+          <span>Conascência dominante</span>
+          <b>${dominantConnascenceLabel(s.connascence)}</b>
+        </li>
+        <li>
+          <span>Projeto analisado</span>
+          <b>${s.projectName || "Atual"}</b>
+          <small>${new Date().toLocaleDateString("pt-BR")}</small>
+        </li>
+      </ul>
     </div>
   `;
 }
@@ -241,60 +288,19 @@ function renderDetailedReport(s: Summary, previousSnapshot: Snapshot | null) {
     return;
   }
 
-  const currentSnapshot = buildSnapshot(s);
   const historyLabel = previousSnapshot
     ? `Comparação com scan anterior de ${formatCapturedAt(previousSnapshot.capturedAt)}`
     : "Sem baseline anterior: este scan será usado como referência para a próxima execução.";
   const moduleDeltas = compareModules(s.modules, previousSnapshot);
   const regressions = moduleDeltas.filter((d) => (d.deltaScore ?? 0) > 0).sort((a, b) => (b.deltaScore ?? 0) - (a.deltaScore ?? 0)).slice(0, 8);
   const improvements = moduleDeltas.filter((d) => (d.deltaScore ?? 0) < 0).sort((a, b) => (a.deltaScore ?? 0) - (b.deltaScore ?? 0)).slice(0, 8);
-  const avgTotalComplexity =
-    s.modules.reduce((sum, m) => sum + m.totalComplexity, 0) / Math.max(1, s.modules.length);
-  const metrics: Array<{ label: string; short: string; delta: MetricDelta; digits?: number }> = [
-    {
-      label: "Módulos monitorados",
-      short: "Módulos",
-      delta: metricDelta(currentSnapshot.moduleCount, previousSnapshot?.moduleCount ?? null),
-    },
-    {
-      label: "Hotspots críticos",
-      short: "Hotspots",
-      delta: metricDelta(currentSnapshot.hotspotCount, previousSnapshot?.hotspotCount ?? null),
-    },
-    {
-      label: "Relações de conascência",
-      short: "Conascências",
-      delta: metricDelta(currentSnapshot.connascenceCount, previousSnapshot?.connascenceCount ?? null),
-    },
-    {
-      label: "Distância média da sequência principal",
-      short: "Distância média",
-      delta: metricDelta(currentSnapshot.avgDistance, previousSnapshot?.avgDistance ?? null),
-      digits: 3,
-    },
-    {
-      label: "Instabilidade média",
-      short: "Instabilidade",
-      delta: metricDelta(currentSnapshot.avgInstability, previousSnapshot?.avgInstability ?? null),
-      digits: 3,
-    },
-    {
-      label: "Complexidade máxima média por módulo",
-      short: "Cx máx média",
-      delta: metricDelta(currentSnapshot.avgMaxComplexity, previousSnapshot?.avgMaxComplexity ?? null),
-      digits: 1,
-    },
-    {
-      label: "Complexidade total média por módulo",
-      short: "Cx total média",
-      delta: metricDelta(avgTotalComplexity, null),
-      digits: 1,
-    },
-  ];
-
+  const riskModules = s.modules.filter((m) => m.godBlocks.length > 0 || m.orphanBlocks.length > 0).length;
+  const comparableModules = moduleDeltas.filter((item) => item.deltaScore !== null).length;
+  const topActionModules = [...s.modules]
+    .sort((a, b) => moduleRiskScore(b) - moduleRiskScore(a))
+    .slice(0, 6);
   const byDistance = [...s.modules].sort((a, b) => b.distance - a.distance).slice(0, 5);
   const byComplexity = [...s.modules].sort((a, b) => b.maxComplexity - a.maxComplexity).slice(0, 5);
-  const modulesWithRisk = s.modules.filter((m) => m.godBlocks.length > 0 || m.orphanBlocks.length > 0).length;
   const byLanguage = languageBreakdown(s.modules);
 
   report.innerHTML = `
@@ -302,66 +308,65 @@ function renderDetailedReport(s: Summary, previousSnapshot: Snapshot | null) {
       <h3>Painel Analítico</h3>
       <p class="history">${historyLabel}</p>
     </header>
-    <div class="report-cards report-cards-dense">
-      ${metrics
-        .map((item) => {
-          const displayValue = formatMetric(item.delta.current, item.digits ?? 0);
-          const change = formatDelta(item.delta, item.digits ?? 0);
-          const cls = deltaClass(item.delta.delta);
-          return `<article><span title="${item.label}">${item.short}</span><strong>${displayValue}</strong><small class="${cls}">${change}</small></article>`;
-        })
-        .join("")}
-      <article><span>Módulos com risco</span><strong>${modulesWithRisk}</strong><small class="neutral">God ou órfão detectado</small></article>
+    <div class="report-priority">
+      <article><span>Risco imediato</span><strong>${riskModules}</strong><small class="neutral">Com God ou órfão</small></article>
+      <article><span>Regressões</span><strong>${regressions.length}</strong><small class="delta-up">${comparableModules > 0 ? "Pioras comparáveis detectadas" : "Sem baseline comparável"}</small></article>
+      <article><span>Evoluções</span><strong>${improvements.length}</strong><small class="delta-down">${comparableModules > 0 ? "Melhoras comparáveis detectadas" : "Sem baseline comparável"}</small></article>
     </div>
     <section>
-      <h4>Regressões desde o último scan</h4>
-      ${moduleDeltaList(regressions, "up")}
+      <h4>Prioridade de ação imediata</h4>
+      ${moduleList(topActionModules, (m) => `Risco ${moduleRiskScore(m).toFixed(1)} | D=${m.distance.toFixed(3)} | Cx máx=${m.maxComplexity}`)}
     </section>
     <section>
-      <h4>Evoluções desde o último scan</h4>
-      ${moduleDeltaList(improvements, "down")}
+      <h4>Mudanças desde o último scan</h4>
+      <div class="report-flow">
+        <section>
+          <h5>Regressões</h5>
+          ${moduleDeltaList(regressions, "up")}
+        </section>
+        <section>
+          <h5>Evoluções</h5>
+          ${moduleDeltaList(improvements, "down")}
+        </section>
+      </div>
     </section>
-    <section>
-      <h4>Breakdown por linguagem</h4>
+    <details class="report-extra">
+      <summary>Contexto complementar</summary>
       <div class="report-langs">
         ${byLanguage.map((entry) => `<article><span>${entry.language.toUpperCase()}</span><strong>${entry.modules} módulos</strong><small>${entry.files} arquivos</small></article>`).join("")}
       </div>
-    </section>
-    <div class="report-grids">
-      <section>
-        <h4>Top distância da sequência principal</h4>
-        ${moduleList(byDistance, (m) => `D=${m.distance.toFixed(3)} | I=${m.instability.toFixed(3)} | A=${m.abstraction.toFixed(3)}`)}
-      </section>
-      <section>
-        <h4>Top complexidade</h4>
-        ${moduleList(byComplexity, (m) => `Máx=${m.maxComplexity} | Total=${m.totalComplexity} | Ce=${m.efferent}`)}
-      </section>
-    </div>
+      <div class="report-grids">
+        <section>
+          <h4>Top distância da sequência principal</h4>
+          ${moduleList(byDistance, (m) => `D=${m.distance.toFixed(3)} | I=${m.instability.toFixed(3)} | A=${m.abstraction.toFixed(3)}`)}
+        </section>
+        <section>
+          <h4>Top complexidade</h4>
+          ${moduleList(byComplexity, (m) => `Máx=${m.maxComplexity} | Total=${m.totalComplexity} | Ce=${m.efferent}`)}
+        </section>
+      </div>
+    </details>
     <section>
       <h4>Todos os módulos</h4>
       <div class="report-table-wrap">
         <table class="report-table">
           <thead>
-            <tr><th>Módulo</th><th>Lang</th><th>Ca</th><th>Ce</th><th>I</th><th>A</th><th>D</th><th>Δ risco</th><th>Cx Máx</th><th>Órfãos</th><th>God</th></tr>
+            <tr><th scope="col">Módulo</th><th scope="col">Lang</th><th scope="col">Risco</th><th scope="col">D</th><th scope="col">Cx Máx</th><th scope="col">Órfãos</th><th scope="col">God</th></tr>
           </thead>
           <tbody>
             ${s.modules.map((m) => {
               const delta = moduleDeltas.find((d) => d.module === m.module) ?? null;
-              const deltaText = delta ? formatSigned(delta.deltaScore, 1) : "n/a";
               const deltaCls = deltaClass(delta?.deltaScore ?? null);
+              const deltaLabel = deltaTrendLabel(delta?.deltaScore ?? null);
               return `
               <tr>
-                <td><button class="module-link" data-module="${escapeAttr(m.module)}"><code>${m.module}</code></button></td>
-                <td>${(m.language || "-").toUpperCase()}</td>
-                <td>${m.afferent}</td>
-                <td>${m.efferent}</td>
-                <td>${m.instability.toFixed(3)}</td>
-                <td>${m.abstraction.toFixed(3)}</td>
-                <td>${m.distance.toFixed(3)}</td>
-                <td class="${deltaCls}">${deltaText}</td>
-                <td>${m.maxComplexity}</td>
-                <td>${m.orphanBlocks.length}</td>
-                <td>${m.godBlocks.length}</td>
+                <td data-label="Módulo"><button class="module-link" data-module="${escapeAttr(m.module)}" aria-label="Abrir diagnóstico do módulo ${escapeAttr(m.module)}"><code>${m.module}</code></button></td>
+                <td data-label="Lang">${(m.language || "-").toUpperCase()}</td>
+                <td data-label="Risco" class="${deltaCls}">${deltaLabel} ${moduleRiskScore(m).toFixed(1)}</td>
+                <td data-label="D">${m.distance.toFixed(3)}</td>
+                <td data-label="Cx Máx">${m.maxComplexity}</td>
+                <td data-label="Órfãos">${m.orphanBlocks.length}</td>
+                <td data-label="God">${m.godBlocks.length}</td>
               </tr>`;
             }).join("")}
           </tbody>
@@ -411,13 +416,17 @@ function moduleDeltaList(items: ModuleDelta[], direction: "up" | "down"): string
 
 function renderChart(s: Summary) {
   const chart = d3.select<HTMLDivElement, unknown>("#chart");
+  chart.selectAll("*").remove();
+  const palette = readChartPalette();
   if (s.modules.length === 0) {
     chart.append("div")
       .attr("class", "hint")
       .text("Nenhum módulo detectado para desenhar o mapa. Tente um projeto Go ou force --lang go.");
     return;
   }
-  const width = chart.node()!.getBoundingClientRect().width;
+  const chartNode = chart.node();
+  if (!chartNode) return;
+  const width = Math.max(CHART_MIN_WIDTH, Math.round(chartNode.getBoundingClientRect().width || CHART_MIN_WIDTH));
   const height = 460;
   const margin = { top: 20, right: 20, bottom: 40, left: 50 };
   const svg = chart.append<SVGSVGElement>("svg").attr("viewBox", `0 0 ${width} ${height}`);
@@ -430,16 +439,16 @@ function renderChart(s: Summary) {
 
   g.append("rect")
     .attr("x", 0).attr("y", 0).attr("width", iw).attr("height", ih)
-    .attr("fill", "#f8fbff");
+    .attr("fill", palette.bg);
 
   const color = (m: ModuleMetrics) =>
-    m.distance > 0.5 ? "#ff5d5d" : m.distance > 0.3 ? "#ffd166" : "#8ddc8d";
+    m.distance > 0.5 ? palette.riskHigh : m.distance > 0.3 ? palette.riskMid : palette.riskLow;
 
   // Main sequence line.
   g.append("line")
     .attr("x1", x(0)).attr("y1", y(1))
     .attr("x2", x(1)).attr("y2", y(0))
-    .attr("stroke", "#b7c7df").attr("stroke-dasharray", "4 4");
+    .attr("stroke", palette.mainSequence).attr("stroke-dasharray", "4 4");
 
   g.append("g")
     .attr("transform", `translate(0,${ih})`)
@@ -450,9 +459,9 @@ function renderChart(s: Summary) {
     .call(formatAxisTickLabels);
 
   g.append("text").attr("x", iw / 2).attr("y", ih + 36)
-    .attr("text-anchor", "middle").attr("fill", "#5f7391").text("Instabilidade (I)");
+    .attr("text-anchor", "middle").attr("fill", palette.axis).text("Instabilidade (I)");
   g.append("text").attr("transform", "rotate(-90)").attr("x", -ih / 2).attr("y", -38)
-    .attr("text-anchor", "middle").attr("fill", "#5f7391").text("Abstração (A)");
+    .attr("text-anchor", "middle").attr("fill", palette.axis).text("Abstração (A)");
 
   const r = (m: ModuleMetrics) => 4 + Math.min(18, Math.sqrt(m.maxComplexity) * 3);
 
@@ -472,7 +481,7 @@ function renderChart(s: Summary) {
     .attr("y1", (d: ConnLineDatum) => y(d.from.abstraction))
     .attr("x2", (d: ConnLineDatum) => x(d.to.instability))
     .attr("y2", (d: ConnLineDatum) => y(d.to.abstraction))
-    .attr("stroke", (d: ConnLineDatum) => (d.conn.kind === "name" ? "#a05cff" : "#ff8a3d"))
+    .attr("stroke", (d: ConnLineDatum) => (d.conn.kind === "name" ? palette.connName : palette.connMeaning))
     .attr("opacity", 0.5);
 
   const dots = g.selectAll<SVGCircleElement, ModuleMetrics>(".dot")
@@ -484,7 +493,7 @@ function renderChart(s: Summary) {
     .attr("cy", (m: ModuleMetrics) => y(m.abstraction))
     .attr("r", r)
     .attr("fill", color)
-    .attr("stroke", "#d8e2f1")
+    .attr("stroke", palette.dotStroke)
     .style("cursor", "pointer")
     .on("click", (_e: MouseEvent, m: ModuleMetrics) => selectModule(m));
 
@@ -492,16 +501,94 @@ function renderChart(s: Summary) {
 }
 
 function formatAxisTickLabels(sel: AxisSelection): void {
+  const axisColor = readCssVar("--chart-axis", "rgb(95 115 145)");
   sel
     .selectAll<SVGTextElement, number>("text")
-    .attr("fill", "#5f7391")
+    .attr("fill", axisColor)
     .text((d: number) => d.toFixed(1));
+}
+
+function setupChartResponsiveness(summary: Summary): void {
+  teardownChartResponsiveness();
+  const chartElement = document.getElementById("chart");
+  const detailsElement = chartElement?.closest("details");
+  if (!chartElement) return;
+
+  const scheduleRender = () => {
+    if (chartResizeRaf !== null) {
+      window.cancelAnimationFrame(chartResizeRaf);
+    }
+    chartResizeRaf = window.requestAnimationFrame(() => {
+      chartResizeRaf = null;
+      renderChart(summary);
+    });
+  };
+
+  chartResizeHandler = scheduleRender;
+  chartOrientationHandler = scheduleRender;
+  window.addEventListener("resize", chartResizeHandler);
+  window.addEventListener("orientationchange", chartOrientationHandler);
+
+  if ("ResizeObserver" in window) {
+    chartResizeObserver = new ResizeObserver(() => scheduleRender());
+    chartResizeObserver.observe(chartElement);
+  }
+
+  if (detailsElement instanceof HTMLDetailsElement) {
+    chartDetailsElement = detailsElement;
+    chartToggleHandler = () => scheduleRender();
+    chartDetailsElement.addEventListener("toggle", chartToggleHandler);
+  }
+}
+
+function teardownChartResponsiveness(): void {
+  if (chartResizeObserver) {
+    chartResizeObserver.disconnect();
+    chartResizeObserver = null;
+  }
+  if (chartResizeHandler) {
+    window.removeEventListener("resize", chartResizeHandler);
+    chartResizeHandler = null;
+  }
+  if (chartOrientationHandler) {
+    window.removeEventListener("orientationchange", chartOrientationHandler);
+    chartOrientationHandler = null;
+  }
+  if (chartDetailsElement && chartToggleHandler) {
+    chartDetailsElement.removeEventListener("toggle", chartToggleHandler);
+  }
+  chartDetailsElement = null;
+  chartToggleHandler = null;
+  if (chartResizeRaf !== null) {
+    window.cancelAnimationFrame(chartResizeRaf);
+    chartResizeRaf = null;
+  }
+}
+
+function readCssVar(name: string, fallback: string): string {
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+function readChartPalette(): ChartPalette {
+  return {
+    bg: readCssVar("--chart-bg", "rgb(248 251 255)"),
+    axis: readCssVar("--chart-axis", "rgb(95 115 145)"),
+    mainSequence: readCssVar("--chart-main-sequence", "rgb(183 199 223)"),
+    connName: readCssVar("--chart-conn-name", "rgb(160 92 255)"),
+    connMeaning: readCssVar("--chart-conn-meaning", "rgb(255 138 61)"),
+    dotStroke: readCssVar("--chart-dot-stroke", "rgb(216 226 241)"),
+    riskHigh: readCssVar("--risk-high", "rgb(196 58 58)"),
+    riskMid: readCssVar("--risk-mid", "rgb(238 159 47)"),
+    riskLow: readCssVar("--risk-low", "rgb(31 125 80)"),
+  };
 }
 
 function selectModule(m: ModuleMetrics) {
   selected = m;
   const panel = requiredEl<HTMLElement>("panel");
   panel.classList.remove("empty");
+  panel.setAttribute("aria-label", `Diagnóstico detalhado do módulo ${m.module}`);
   const last = m.module.split("/").pop();
   const conns = data!.connascence.filter((c) => c.from === m.module || c.to === m.module);
   panel.innerHTML = `
@@ -519,6 +606,7 @@ function selectModule(m: ModuleMetrics) {
     ${m.orphanBlocks.length ? section("Código órfão", m.orphanBlocks) : ""}
     ${conns.length ? connSection(conns, m.module) : ""}
   `;
+  panel.focus();
 }
 
 function pct(a: number, b: number): string {
@@ -678,11 +766,6 @@ function metricDelta(current: number, previous: number | null): MetricDelta {
   };
 }
 
-function formatMetric(value: number, digits: number): string {
-  if (digits <= 0) return Math.round(value).toString();
-  return value.toFixed(digits);
-}
-
 function formatSigned(value: number | null, digits: number): string {
   if (value === null) return "n/a";
   const rounded = value.toFixed(digits);
@@ -691,7 +774,9 @@ function formatSigned(value: number | null, digits: number): string {
 
 function formatDelta(delta: MetricDelta, digits: number): string {
   if (delta.previous === null || delta.delta === null) return "Sem baseline";
-  return `Δ ${formatSigned(delta.delta, digits)} vs anterior`;
+  if (delta.delta > 0) return `Subiu ${formatSigned(delta.delta, digits)} vs anterior`;
+  if (delta.delta < 0) return `Caiu ${formatSigned(delta.delta, digits)} vs anterior`;
+  return "Sem mudança vs anterior";
 }
 
 function deltaClass(delta: number | null): string {
@@ -699,6 +784,13 @@ function deltaClass(delta: number | null): string {
   if (delta > 0) return "delta-up";
   if (delta < 0) return "delta-down";
   return "neutral";
+}
+
+function deltaTrendLabel(delta: number | null): string {
+  if (delta === null) return "•";
+  if (delta > 0) return "↑";
+  if (delta < 0) return "↓";
+  return "=";
 }
 
 function formatCapturedAt(isoDate: string): string {

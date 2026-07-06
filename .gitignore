@@ -6,3 +6,5 @@ web/dist/assets/
 .env
 homebrew-tap/
 .cache/
+.impeccable/
+PRODUCT.md
