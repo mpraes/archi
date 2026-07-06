@@ -113,8 +113,8 @@ func Analyze(p *model.Program) model.Summary {
 		m.OrphanBlocks = orphans
 	}
 
-	// 5. God blocks: complexity above heuristic threshold (top decile or >= 15).
-	const godThreshold = 15
+	// 5. God blocks: complexity above heuristic threshold (>= 10 as acceptable limit, < 5 is good).
+	const godThreshold = 10
 	for i := range p.Modules {
 		m := &p.Modules[i]
 		var gods []string
