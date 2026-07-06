@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -109,7 +110,7 @@ func TestBinaryServerAPI(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binPath(t), root, "--no-browser", "--port", "0", "--lang", "go")
-	var stderr bytes.Buffer
+	var stderr syncBuffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -142,7 +143,7 @@ func TestBinaryServerAPI(t *testing.T) {
 	}
 }
 
-func waitForServerAddr(stderr *bytes.Buffer, timeout time.Duration) (string, error) {
+func waitForServerAddr(stderr *syncBuffer, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		s := stderr.String()
@@ -155,6 +156,24 @@ func waitForServerAddr(stderr *bytes.Buffer, timeout time.Duration) (string, err
 		time.Sleep(100 * time.Millisecond)
 	}
 	return "", fmt.Errorf("timeout")
+}
+
+// syncBuffer is a mutex-protected buffer safe for concurrent exec writes and test reads.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func fixtureMiniGo(t *testing.T) string {
