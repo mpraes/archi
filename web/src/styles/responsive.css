@@ -1,0 +1,131 @@
+@media (max-width: 1180px) {
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .compact-nav {
+    display: flex;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .main {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .compact-nav {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--surface-blur-bg);
+    backdrop-filter: blur(6px);
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(145px, 1fr));
+  }
+
+  .hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .report-priority {
+    grid-template-columns: 1fr;
+  }
+
+  .report-priority article {
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .report-priority article:last-child {
+    border-bottom: 0;
+  }
+
+  .report-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .report-grids {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-tools {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .report-table {
+    min-width: 0;
+    font-size: 12px;
+  }
+
+  .report-table thead {
+    display: none;
+  }
+
+  .report-table,
+  .report-table tbody {
+    display: block;
+  }
+
+  .report-table tr {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .report-table td {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 8px;
+    border-bottom: 0;
+    padding: 0;
+    white-space: normal;
+    align-items: baseline;
+  }
+
+  .report-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .report-table td:first-child {
+    grid-template-columns: 1fr;
+  }
+
+  .report-table td:first-child::before {
+    display: none;
+  }
+
+  .module-link code {
+    font-size: 13px;
+  }
+}

@@ -67,6 +67,7 @@ function normalizeSummary(raw: unknown): Summary {
       module: String(m.module ?? ""),
       path: String(m.path ?? ""),
       language: String(m.language ?? ""),
+      dependencies: asStringArray(m.dependencies),
       files: asNumber(m.files),
       afferent: asNumber(m.afferent),
       efferent: asNumber(m.efferent),
