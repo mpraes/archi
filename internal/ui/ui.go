@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -71,7 +70,6 @@ type Spinner struct {
 	stop   chan struct{}
 	done   chan struct{}
 	frames []string
-	mu     sync.Mutex
 }
 
 func NewSpinner(label string) *Spinner {

@@ -204,13 +204,12 @@ type cycloVisitor struct {
 }
 
 func (v *cycloVisitor) Visit(n ast.Node) ast.Visitor {
-	switch n.(type) {
+	switch n := n.(type) {
 	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt,
 		*ast.TypeSwitchStmt, *ast.CaseClause, *ast.LabeledStmt:
 		v.count++
 	case *ast.BinaryExpr:
-		// && / || add one path each.
-		if n.(*ast.BinaryExpr).Op == token.LAND || n.(*ast.BinaryExpr).Op == token.LOR {
+		if n.Op == token.LAND || n.Op == token.LOR {
 			v.count++
 		}
 	}

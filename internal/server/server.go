@@ -49,7 +49,10 @@ func (s *Server) Run(ctx context.Context, ln net.Listener) error {
 	}
 	r.Handle("/*", http.FileServer(http.FS(dist)))
 
-	srv := &http.Server{Handler: r}
+	srv := &http.Server{
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()
 	select {

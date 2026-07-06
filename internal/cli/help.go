@@ -12,10 +12,10 @@ import (
 func attachStyledHelp(root *cobra.Command) {
 	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd.Name() != root.Name() {
-			fmt.Fprintln(cmd.OutOrStdout(), renderSubcommandHelp(cmd))
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), renderSubcommandHelp(cmd))
 			return
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), renderRootHelp(cmd))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), renderRootHelp(cmd))
 	})
 }
 
@@ -137,9 +137,9 @@ func renderSubcommandHelp(cmd *cobra.Command) string {
 
 func renderFlagLine(b *strings.Builder, f *pflag.Flag) {
 	if f.Shorthand != "" {
-		b.WriteString(fmt.Sprintf("  -%s, --%s", f.Shorthand, f.Name))
+		fmt.Fprintf(b, "  -%s, --%s", f.Shorthand, f.Name)
 	} else {
-		b.WriteString(fmt.Sprintf("      --%s", f.Name))
+		fmt.Fprintf(b, "      --%s", f.Name)
 	}
 	if f.Value.Type() != "bool" {
 		b.WriteString(" ")
@@ -148,7 +148,7 @@ func renderFlagLine(b *strings.Builder, f *pflag.Flag) {
 	b.WriteString("\n      ")
 	b.WriteString(f.Usage)
 	if f.DefValue != "" && f.DefValue != "false" {
-		b.WriteString(fmt.Sprintf(" (default: %s)", f.DefValue))
+		fmt.Fprintf(b, " (default: %s)", f.DefValue)
 	}
 	b.WriteString("\n")
 }

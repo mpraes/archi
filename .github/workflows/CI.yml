@@ -15,7 +15,7 @@ on:
 
 env:
   GO_VERSION: '1.26.3'
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
   MIN_COVERAGE: '75'
 
 permissions:
@@ -48,7 +48,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.1.6
-          args: --timeout=5m
+          args: --config .github/golangci.yml --timeout=5m
 
       - name: gofmt check
         run: |
