@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UI focus shifted to an analytical report + comparative KPIs, with the scatter map as a secondary support view.
 - Built-in scan excludes expanded to include additional build and Python artifacts (`dist`, `build`, `out`, `venv`, `.venv`, `__pycache__`, `*.pyc`, extra `*.spec.*`).
 - AI activation flow now enables automatically when `GEMINI_API_KEY` or `--api-key` is available, while preserving non-blocking streaming behavior.
+- README installation docs now include a dedicated update flow with `Upgrade (recommended)` and `Clean reinstall (troubleshooting)` guidance per distribution method.
+- `docs/cli_config.md` now explicitly delegates distribution/update instructions to `README.md`, keeping CLI docs focused on command/flag contract.
 
 ## [0.1.0] - 2026-07-04
 ### Added
