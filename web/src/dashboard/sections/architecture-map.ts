@@ -49,7 +49,7 @@ export function renderArchitectureMap(summary: Summary, onModuleSelect: (module:
       </section>
       <section class="architecture-note">
         <h4>How to use</h4>
-        <p>Node size and color are driven by module risk score. Click a node to open module diagnostics in the side panel.</p>
+        <p>Node size and color are driven by module risk score. Click a node to open module diagnostics in the module section.</p>
       </section>
     </div>
     <div id="arch-graph" class="architecture-graph"></div>

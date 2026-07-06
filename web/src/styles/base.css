@@ -124,6 +124,12 @@ body {
   box-shadow: var(--shadow-xs);
 }
 
+.top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .topbar h2 {
   margin: 0;
   font-size: 24px;
@@ -152,6 +158,10 @@ body {
   gap: 14px;
 }
 
+.main.stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .main-left,
 .main-right {
   display: grid;
@@ -170,6 +180,10 @@ body {
 
 .panel.empty .hint {
   color: var(--muted);
+}
+
+.module-diagnosis {
+  margin-top: 2px;
 }
 
 .panel h2 {
@@ -246,6 +260,52 @@ body {
 .hint {
   color: var(--muted);
   overflow-wrap: break-word;
+}
+
+.doc-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft-border);
+  background: var(--accent-soft-bg);
+  color: var(--accent-strong);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.doc-link:hover {
+  background: color-mix(in srgb, var(--accent-soft-bg) 74%, var(--panel));
+}
+
+.docs-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.docs-panel header h3 {
+  margin: 0;
+}
+
+.docs-panel h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.docs-panel p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.docs-panel ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.docs-panel li {
+  margin: 4px 0;
 }
 
 .delta-up {
