@@ -14,8 +14,10 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            cc: gcc
           - goos: linux
             goarch: arm64
+            cc: aarch64-linux-gnu-gcc
     steps:
       - uses: actions/checkout@v4
 
@@ -33,11 +35,17 @@ jobs:
         working-directory: web
         run: npm ci && npm run build
 
+      - name: Install build toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc gcc-aarch64-linux-gnu
+
       - name: Build binary
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: 1
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
         run: |
           VERSION="${GITHUB_REF_NAME}"
           BIN="archi"

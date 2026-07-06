@@ -123,10 +123,10 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "num=${v#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build static binary
+      - name: Build binary
         shell: bash
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: '1'
           LDFLAGS: -s -w -X main.version=${{ steps.ver.outputs.version }}
         run: |
           mkdir -p staging
