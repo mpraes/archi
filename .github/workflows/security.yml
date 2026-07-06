@@ -60,7 +60,7 @@ jobs:
       - name: Build frontend for CodeQL
         working-directory: web
         run: npm ci && npm run build
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
