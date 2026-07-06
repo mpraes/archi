@@ -623,3 +623,26 @@
   stroke: var(--accent);
   stroke-width: 2;
 }
+
+.connascence-view {
+  display: grid;
+  gap: 10px;
+}
+
+.connascence-header h3 {
+  margin: 0;
+}
+
+.connascence-header .hint {
+  margin: 6px 0 0;
+}
+
+.connascence-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  max-height: min(68vh, 760px);
+  overflow: auto;
+  padding-right: 8px;
+}

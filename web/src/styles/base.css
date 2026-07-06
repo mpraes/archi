@@ -107,6 +107,11 @@ body {
   gap: 14px;
 }
 
+.dashboard-page {
+  display: grid;
+  gap: 14px;
+}
+
 .topbar {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -190,6 +195,12 @@ body {
 .panel ul {
   margin: 0;
   padding-left: 18px;
+}
+
+.panel .conn-list {
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 8px;
 }
 
 .panel .m,

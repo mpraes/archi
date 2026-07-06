@@ -23,9 +23,10 @@ export function renderArchitectureMap(summary: Summary, onModuleSelect: (module:
   const meta = requiredEl<HTMLElement>("architecture-map-meta");
   const content = requiredEl<HTMLElement>("architecture-map-content");
   const graph = buildArchitectureGraph(summary);
+  const connascenceView = document.getElementById("connascence-view");
 
   meta.innerHTML = `
-    <div id="connascence-view" class="architecture-kpis">
+    <div class="architecture-kpis">
       <article><span>Modules rendered</span><strong>${graph.nodes.length}</strong><small>${graph.wasTrimmed ? `Auto-limited from ${summary.modules.length}` : "Full project graph"}</small></article>
       <article><span>Edges rendered</span><strong>${graph.edges.length}</strong><small>${graph.dependencyEdges} dependencies + ${graph.connEdges} connascence</small></article>
       <article><span>Dominant connascence</span><strong>${dominantConnascenceLabel(summary.connascence)}</strong><small>Cross-module coupling signal</small></article>
@@ -53,6 +54,9 @@ export function renderArchitectureMap(summary: Summary, onModuleSelect: (module:
     </div>
     <div id="arch-graph" class="architecture-graph"></div>
   `;
+  if (connascenceView) {
+    connascenceView.innerHTML = renderConnascenceSection(summary);
+  }
 
   const graphEl = requiredEl<HTMLElement>("arch-graph");
   if (graph.nodes.length === 0) {
@@ -174,6 +178,49 @@ export function renderArchitectureMap(summary: Summary, onModuleSelect: (module:
       nodes.attr("cx", (node) => node.x ?? 0).attr("cy", (node) => node.y ?? 0);
       labels.attr("x", (node) => node.x ?? 0).attr("y", (node) => (node.y ?? 0) + nodeRadius(node) + 11);
     });
+}
+
+function renderConnascenceSection(summary: Summary): string {
+  const grouped = new Map<string, { kind: "name" | "meaning"; from: string; to: string; detail: string; count: number }>();
+  for (const conn of summary.connascence) {
+    const key = `${conn.kind}|${conn.from}|${conn.to}|${conn.detail}`;
+    const current = grouped.get(key);
+    if (current) current.count += 1;
+    else grouped.set(key, { ...conn, count: 1 });
+  }
+
+  const rows = [...grouped.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 120)
+    .map((item) => {
+      const kindLabel = item.kind === "name" ? "Name connascence" : "Meaning connascence";
+      const repeated = item.count > 1 ? `<small>Repeated ${item.count} times</small>` : "";
+      return `<li><span class="m">${kindLabel}</span> <code>${item.from}</code> → <code>${item.to}</code><br><small>${item.detail}</small>${repeated}</li>`;
+    })
+    .join("");
+
+  if (rows.length === 0) {
+    return `
+      <header>
+        <h3>Shared meaning hotspots</h3>
+        <p class="hint">No cross-module meaning or naming links were detected in this scan.</p>
+      </header>
+    `;
+  }
+
+  const overflowHint =
+    grouped.size > 120
+      ? `<p class="hint">Showing the top 120 relationships (out of ${grouped.size}) sorted by repetition count.</p>`
+      : "";
+
+  return `
+    <header class="connascence-header">
+      <h3>Shared meaning hotspots</h3>
+      <p class="hint">Review the strongest cross-module naming and meaning couplings.</p>
+    </header>
+    ${overflowHint}
+    <ul class="connascence-list">${rows}</ul>
+  `;
 }
 
 function buildArchitectureGraph(summary: Summary): {

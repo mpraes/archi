@@ -3,12 +3,12 @@ import { requiredEl } from "./ui";
 
 export function defaultNavItems(): NavItem[] {
   return [
-    { label: "Overview", targetId: "hero" },
-    { label: "Modules", targetId: "report" },
-    { label: "Architecture Map", targetId: "architecture-map" },
-    { label: "Connascence", targetId: "connascence-view" },
-    { label: "Risk", targetId: "kpi-grid" },
-    { label: "History", targetId: "activity" },
+    { label: "Architecture overview", targetId: "hero" },
+    { label: "Module diagnosis", targetId: "report" },
+    { label: "Dependency map", targetId: "architecture-map" },
+    { label: "Shared meaning hotspots", targetId: "connascence-view" },
+    { label: "Risk indicators", targetId: "kpi-grid" },
+    { label: "Scan history", targetId: "activity" },
   ];
 }
 
@@ -35,7 +35,7 @@ export function renderDashboardShell(navItems: NavItem[]): void {
       <main class="workspace">
         <header class="topbar">
           <div>
-            <h2>Dashboard</h2>
+            <h2 id="workspace-title">Architecture overview</h2>
             <p id="status" role="status" aria-live="polite">Loading architecture diagnosis…</p>
           </div>
           <div class="top-actions">
@@ -45,30 +45,43 @@ export function renderDashboardShell(navItems: NavItem[]): void {
         <nav class="compact-nav" aria-label="Primary navigation">
           ${navLinks}
         </nav>
-        <section id="hero" class="hero"></section>
-        <section class="main">
-          <div class="main-left">
-            <section id="report" class="report"></section>
-          </div>
-          <aside class="main-right">
-            <section id="panel" class="panel empty" role="region" aria-live="polite" tabindex="-1">
-              <p class="hint">Click a module in the table (or map) to see its diagnosis.</p>
-            </section>
-          </aside>
+        <section class="dashboard-page is-active" data-page="overview">
+          <section id="hero" class="hero"></section>
         </section>
-        <section id="architecture-map" class="panel architecture-map" aria-live="polite">
-          <header class="architecture-map-header">
-            <h3>Architecture Map</h3>
-            <p>Interactive block-code architecture graph with module-level dependencies and connascence links.</p>
-          </header>
-          <section class="architecture-map-workspace">
-            <div id="architecture-map-meta" class="architecture-map-meta"></div>
-            <div id="architecture-map-content" class="architecture-map-content"></div>
+        <section class="dashboard-page" data-page="modules" hidden>
+          <section class="main">
+            <div class="main-left">
+              <section id="report" class="report"></section>
+            </div>
+            <aside class="main-right">
+              <section id="panel" class="panel empty" role="region" aria-live="polite" tabindex="-1">
+                <p class="hint">Click a module in the table (or map) to see its diagnosis.</p>
+              </section>
+            </aside>
           </section>
         </section>
-        <section id="kpi-grid" class="kpi-grid"></section>
-        <section id="activity" class="panel activity" aria-live="polite"></section>
-        <section id="ai-panel" class="ai hidden"></section>
+        <section class="dashboard-page" data-page="architecture" hidden>
+          <section id="architecture-map" class="panel architecture-map" aria-live="polite">
+            <header class="architecture-map-header">
+              <h3>Architecture Map</h3>
+              <p>Interactive block-code architecture graph with module-level dependencies and connascence links.</p>
+            </header>
+            <section class="architecture-map-workspace">
+              <div id="architecture-map-meta" class="architecture-map-meta"></div>
+              <div id="architecture-map-content" class="architecture-map-content"></div>
+            </section>
+          </section>
+        </section>
+        <section class="dashboard-page" data-page="connascence" hidden>
+          <section id="connascence-view" class="panel connascence-view" aria-live="polite"></section>
+        </section>
+        <section class="dashboard-page" data-page="risk" hidden>
+          <section id="kpi-grid" class="kpi-grid"></section>
+        </section>
+        <section class="dashboard-page" data-page="history" hidden>
+          <section id="activity" class="panel activity" aria-live="polite"></section>
+          <section id="ai-panel" class="ai hidden"></section>
+        </section>
       </main>
     </div>
   `;
@@ -77,6 +90,7 @@ export function renderDashboardShell(navItems: NavItem[]): void {
 export function setupNavigation(navItems: NavItem[]): void {
   const links = [...document.querySelectorAll<HTMLAnchorElement>(".side-nav a[data-target], .compact-nav a[data-target]")];
   const linksByTarget = new Map<string, HTMLAnchorElement[]>();
+  const pages = [...document.querySelectorAll<HTMLElement>(".dashboard-page")];
 
   for (const link of links) {
     const targetId = link.dataset.target;
@@ -86,34 +100,69 @@ export function setupNavigation(navItems: NavItem[]): void {
     linksByTarget.set(targetId, bucket);
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      const target = document.getElementById(targetId);
-      if (!target) return;
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-      setActiveNavTarget(linksByTarget, targetId);
+      activateTarget(targetId, linksByTarget, pages, true);
     });
   }
 
-  const observer = new IntersectionObserver(
-    (entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-      const top = visible[0];
-      if (top?.target?.id) {
-        setActiveNavTarget(linksByTarget, top.target.id);
-      }
-    },
-    {
-      root: null,
-      threshold: [0.25, 0.4, 0.6],
-      rootMargin: "-15% 0px -55% 0px",
-    },
-  );
+  window.addEventListener("hashchange", () => {
+    const targetId = pickHashTarget(window.location.hash, navItems);
+    if (targetId) activateTarget(targetId, linksByTarget, pages, false);
+  });
 
-  for (const item of navItems) {
-    const section = document.getElementById(item.targetId);
-    if (section) observer.observe(section);
+  window.addEventListener("archi:navigate", (event) => {
+    const custom = event as CustomEvent<{ targetId?: string }>;
+    const targetId = custom.detail?.targetId;
+    if (!targetId) return;
+    activateTarget(targetId, linksByTarget, pages, false);
+  });
+
+  const initialTarget = pickHashTarget(window.location.hash, navItems) ?? navItems[0]?.targetId;
+  if (initialTarget) activateTarget(initialTarget, linksByTarget, pages, false);
+}
+
+export function requestNavigation(targetId: string): void {
+  window.dispatchEvent(new CustomEvent("archi:navigate", { detail: { targetId } }));
+}
+
+function activateTarget(
+  targetId: string,
+  linksByTarget: Map<string, HTMLAnchorElement[]>,
+  pages: HTMLElement[],
+  updateHash: boolean,
+): void {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+
+  const targetPage = target.closest<HTMLElement>(".dashboard-page");
+  if (targetPage) {
+    for (const page of pages) {
+      const isActive = page === targetPage;
+      page.classList.toggle("is-active", isActive);
+      page.hidden = !isActive;
+    }
   }
+
+  setActiveNavTarget(linksByTarget, targetId);
+  updateWorkspaceTitle(targetId, linksByTarget);
+  if (updateHash) {
+    window.location.hash = targetId;
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function pickHashTarget(hash: string, navItems: NavItem[]): string | null {
+  if (!hash || hash === "#") return null;
+  const target = hash.slice(1);
+  return navItems.some((item) => item.targetId === target) ? target : null;
+}
+
+function updateWorkspaceTitle(targetId: string, linksByTarget: Map<string, HTMLAnchorElement[]>): void {
+  const title = document.getElementById("workspace-title");
+  if (!title) return;
+  const links = linksByTarget.get(targetId);
+  const label = links?.[0]?.textContent?.trim();
+  if (!label) return;
+  title.textContent = label;
 }
 
 function setActiveNavTarget(linksByTarget: Map<string, HTMLAnchorElement[]>, targetId: string): void {

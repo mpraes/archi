@@ -1,4 +1,5 @@
 import { Connascence, ModuleMetrics, Summary } from "../../types";
+import { requestNavigation } from "../layout";
 import { requiredEl } from "../ui";
 
 export function renderModulePanel(summary: Summary, module: ModuleMetrics): void {
@@ -23,6 +24,7 @@ export function renderModulePanel(summary: Summary, module: ModuleMetrics): void
     ${module.orphanBlocks.length ? section("Orphan code", module.orphanBlocks) : ""}
     ${conns.length ? connSection(conns, module.module) : ""}
   `;
+  requestNavigation("report");
   panel.focus();
 }
 
@@ -36,7 +38,9 @@ function section(title: string, items: string[]): string {
 }
 
 function connSection(conns: Connascence[], self: string): string {
-  const rows = conns
+  const maxRows = 32;
+  const visibleConns = conns.slice(0, maxRows);
+  const rows = visibleConns
     .map((conn) => {
       const other = conn.from === self ? conn.to : conn.from;
       const direction = conn.from === self ? "→" : "←";
@@ -44,6 +48,10 @@ function connSection(conns: Connascence[], self: string): string {
       return `<li><span class="m">${label}</span> ${direction} <code>${other}</code><br><small>${conn.detail}</small></li>`;
     })
     .join("");
+  const overflowNote =
+    conns.length > maxRows
+      ? `<p class="hint">Showing ${maxRows} of ${conns.length} relationships. Refine the module scope to inspect fewer links at once.</p>`
+      : "";
 
-  return `<section><h3>Detected connascence</h3><ul>${rows}</ul></section>`;
+  return `<section><h3>Shared meaning links</h3>${overflowNote}<ul class="conn-list">${rows}</ul></section>`;
 }
