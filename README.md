@@ -24,15 +24,15 @@ yay -S archi-bin
 mise use -g github:mpraes/archi
 
 # Direct binary download (Linux)
-curl -fsSL "https://github.com/mpraes/archi/releases/download/v<version>/archi-v<version>-linux-amd64.tar.gz" | tar xz
+curl -fsSL "https://github.com/mpraes/archi/releases/download/vX.Y.Z/archi-vX.Y.Z-linux-amd64.tar.gz" | tar xz
 
 # Direct binary download (Windows)
-# Download archi-v<version>-windows-amd64.zip from GitHub Releases, extract archi.exe, then:
+# Download archi-vX.Y.Z-windows-amd64.zip from GitHub Releases, extract archi.exe, then:
 # .\archi.exe . --no-browser
 
 # DEB / RPM
-sudo dpkg -i archi_<version>_amd64.deb
-# or: sudo rpm -i archi-<version>-1.x86_64.rpm
+sudo dpkg -i archi_X.Y.Z_amd64.deb
+# or: sudo rpm -i archi-X.Y.Z-1.x86_64.rpm
 
 # Build from source
 git clone https://github.com/mpraes/archi && cd archi
@@ -50,7 +50,7 @@ Use in-place upgrade first (faster and safer):
 
 - Homebrew: `brew upgrade archi`
 - AUR: `yay -Syu archi-bin`
-- RPM: `sudo rpm -Uvh archi-<version>-1.x86_64.rpm`
+- RPM: `sudo rpm -Uvh archi-X.Y.Z-1.x86_64.rpm`
 - DEB: `sudo apt update && sudo apt install --only-upgrade archi` (when installed from apt repo)
 - mise: `mise use -g github:mpraes/archi@latest`
 
@@ -75,21 +75,21 @@ mise use -g github:mpraes/archi@latest
 
 # Direct binary install (Linux)
 sudo rm -f /usr/local/bin/archi
-curl -fsSL "https://github.com/mpraes/archi/releases/download/v<version>/archi-v<version>-linux-amd64.tar.gz" | tar xz
-sudo install -m 0755 archi-v<version>-linux-amd64/archi /usr/local/bin/archi
+curl -fsSL "https://github.com/mpraes/archi/releases/download/vX.Y.Z/archi-vX.Y.Z-linux-amd64.tar.gz" | tar xz
+sudo install -m 0755 archi-vX.Y.Z-linux-amd64/archi /usr/local/bin/archi
 archi --version
 
 # DEB
 sudo apt remove archi
-sudo dpkg -i archi_<version>_amd64.deb
+sudo dpkg -i archi_X.Y.Z_amd64.deb
 
 # RPM
 sudo rpm -e archi
-sudo rpm -i archi-<version>-1.x86_64.rpm
-# or upgrade in place: sudo rpm -Uvh archi-<version>-1.x86_64.rpm
+sudo rpm -i archi-X.Y.Z-1.x86_64.rpm
+# or upgrade in place: sudo rpm -Uvh archi-X.Y.Z-1.x86_64.rpm
 ```
 
-Use the latest tag from [GitHub Releases](https://github.com/mpraes/archi/releases) in place of `<version>`.
+Replace `X.Y.Z` with the release number from [GitHub Releases](https://github.com/mpraes/archi/releases), for example `0.1.0`.
 
 ## Quickstart
 
