@@ -88,3 +88,10 @@ archi check --max-distance 0.8
 - Comandos disponíveis atualmente:
   - `export`
   - `check`
+
+## Distribuição e atualização
+
+As instruções de instalação, upgrade e reinstalação limpa por método de distribuição
+(Homebrew, AUR, mise, binário direto, DEB e RPM) ficam centralizadas no `README.md`,
+na seção **"Update to a new version"**.  
+Este documento (`docs/cli_config.md`) descreve apenas o contrato de comandos e flags da CLI.
