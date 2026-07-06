@@ -44,6 +44,10 @@ body {
   color: var(--text);
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 #app {
   max-width: 1420px;
   margin: 0 auto;
@@ -196,6 +200,14 @@ body {
   overflow-wrap: break-word;
 }
 
+.hero-tips {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+}
+
 .hero-priority {
   display: grid;
   gap: 10px;
@@ -287,6 +299,65 @@ body {
   display: block;
   font-size: 12px;
   color: var(--muted);
+}
+
+.card-head,
+.card-head-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-head-inline span {
+  margin: 0;
+}
+
+.info-button {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft-border);
+  background: var(--accent-soft-bg);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.info-button::after {
+  content: attr(data-info);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(280px, 78vw);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  z-index: 6;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+.info-button:hover::after,
+.info-button:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .kpi-card strong {

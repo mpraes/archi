@@ -3,7 +3,7 @@ import { asArray, asBoolean, asNumber, asRecord, asString, asStringArray } from 
 
 export async function fetchMetrics(): Promise<Summary> {
   const res = await fetch("/api/metrics");
-  if (!res.ok) throw new Error("falha ao carregar métricas");
+  if (!res.ok) throw new Error("failed to load metrics");
   const raw = await res.json();
   return normalizeSummary(raw);
 }
@@ -25,7 +25,7 @@ export async function streamAIInsights(
 ): Promise<void> {
   const res = await fetch("/api/ai/insights");
   if (!res.ok || !res.body) {
-    onError("IA indisponível");
+    onError("AI unavailable");
     return;
   }
   const reader = res.body.getReader();
