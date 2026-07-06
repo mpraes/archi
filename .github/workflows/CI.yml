@@ -16,16 +16,17 @@ on:
 env:
   GO_VERSION: '1.26.3'
   NODE_VERSION: '20'
+  MIN_COVERAGE: '75'
 
 permissions:
   contents: read
 
 jobs:
   # ---------------------------------------------------------------------------
-  # CI: runs on every push and PR. Common ground — fmt, vet, security, tests.
+  # Fast path: lint, unit tests, frontend, build, E2E smoke
   # ---------------------------------------------------------------------------
-  ci:
-    name: Lint / Test / Build
+  ci-fast:
+    name: Fast — Lint / Test / Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,13 +44,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
-      - name: Build frontend (embedded into binary via go:embed)
-        working-directory: web
-        run: npm ci && npm run build
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1.6
+          args: --timeout=5m
 
       - name: gofmt check
         run: |
-          out=$(gofmt -l .)
+          out=$(gofmt -l ./cmd ./internal ./web)
           if [ -n "$out" ]; then
             echo "::error::gofmt would reformat:"
             echo "$out"
@@ -59,41 +62,107 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # NOTE: govulncheck is removed here because the genai SDK and its
-      # transitive deps (x/net, x/crypto, x/text) carry known low-severity CVEs
-      # that cannot be patched upstream. Re-enable once fixed:
-      #   go install golang.org/x/vuln/cmd/govulncheck@latest
-      #   govulncheck ./...
+      - name: go test (unit + integration)
+        run: go test -count=1 ./...
 
-      - name: go test
-        run: go test -race -count=1 ./...
+      - name: Frontend install
+        working-directory: web
+        run: npm ci
+
+      - name: Frontend typecheck
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Frontend unit tests
+        working-directory: web
+        run: npm test
+
+      - name: Build frontend (embedded into binary via go:embed)
+        working-directory: web
+        run: npm run build
 
       - name: Build binary
         run: go build -o archi ./cmd/archi
 
-      - name: Smoke test (export json)
-        run: ./archi export --format json > /dev/null
+      - name: E2E smoke (export json)
+        run: ./archi export testdata/mini-go --format json --lang go | jq -e '.moduleCount >= 1'
 
-      - name: Smoke test (check CI gate)
-        run: ./archi check --max-distance 0.7 || true
+      - name: E2E smoke (check gate)
+        run: ./archi check testdata/mini-go --max-distance 1.0 --lang go
 
   # ---------------------------------------------------------------------------
-  # BUILD MATRIX: compile once per (os, arch) on the native runner, package
-  # each as a tarball + sha256. Downstream jobs reuse these artifacts.
+  # Quality path: coverage gate, race, artifacts
+  # ---------------------------------------------------------------------------
+  ci-quality:
+    name: Quality — Coverage / Race
+    runs-on: ubuntu-latest
+    needs: ci-fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: Coverage gate (internal >= ${{ env.MIN_COVERAGE }}%)
+        run: |
+          chmod +x scripts/check-coverage.sh
+          MIN_COVERAGE=${{ env.MIN_COVERAGE }} ./scripts/check-coverage.sh
+
+      - name: Race detector
+        run: go test -race -count=1 ./...
+
+      - name: npm audit (web)
+        working-directory: web
+        run: npm audit --audit-level=high || true
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # BUILD MATRIX: cross-compile per (os, arch) on ubuntu, package each archive
+  # + sha256. Downstream jobs reuse these artifacts.
   # ---------------------------------------------------------------------------
   build:
     name: Build ${{ matrix.os }}/${{ matrix.arch }}
-    needs: ci
+    needs: [ci-fast, ci-quality]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.version != '')
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: linux
             arch: amd64
-            runner: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            cgo: '1'
+            cc: gcc
+            ext: ''
             archive: tar.gz
+          - os: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
+            cgo: '1'
+            cc: x86_64-w64-mingw32-gcc
+            ext: .exe
+            archive: zip
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,6 +183,11 @@ jobs:
         working-directory: web
         run: npm ci && npm run build
 
+      - name: Install build toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc gcc-mingw-w64-x86-64 zip
+
       - name: Resolve version
         id: ver
         shell: bash
@@ -126,13 +200,14 @@ jobs:
       - name: Build binary
         shell: bash
         env:
-          CGO_ENABLED: '1'
+          CGO_ENABLED: ${{ matrix.cgo }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
           LDFLAGS: -s -w -X main.version=${{ steps.ver.outputs.version }}
         run: |
           mkdir -p staging
-          ext=""
-          [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
-          go build -ldflags "$LDFLAGS" -trimpath -o "staging/archi${ext}" ./cmd/archi
+          go build -ldflags "$LDFLAGS" -trimpath -o "staging/archi${{ matrix.ext }}" ./cmd/archi
 
       - name: Pack archive
         shell: bash
@@ -145,11 +220,10 @@ jobs:
           name="archi-${VERSION}-${OS}-${ARCH}"
           mkdir -p "out/${name}"
           cp -r staging/* "out/${name}/"
-          # mise-friendly: ship the LICENSE + a tiny README next to the binary
           [ -f LICENSE ] && cp LICENSE "out/${name}/" || true
           cd out
           if [ "$ARCHIVE" = "zip" ]; then
-            7z a "${name}.${ARCHIVE}" "${name}"
+            zip -r "${name}.${ARCHIVE}" "${name}"
           else
             tar -czf "${name}.${ARCHIVE}" "${name}"
           fi
@@ -232,8 +306,16 @@ jobs:
             echo "## Install"
             echo
             echo '### Direct download'
+            echo
+            echo '**Linux**'
             echo '```sh'
             echo 'curl -fsSL https://github.com/mpraes/archi/releases/download/'"$VERSION"'/archi-'"$VERSION"'-linux-amd64.tar.gz | tar xz'
+            echo '```'
+            echo
+            echo '**Windows**'
+            echo 'Download `archi-'"$VERSION"'-windows-amd64.zip`, extract `archi.exe`, then run from PowerShell or CMD:'
+            echo '```powershell'
+            echo '.\archi.exe . --no-browser'
             echo '```'
             echo
             echo '### DEB / RPM'
@@ -255,10 +337,10 @@ jobs:
           body_path: release_body.md
           files: |
             dist/archi-*.tar.gz
+            dist/archi-*.zip
             dist/checksums.txt
           fail_on_unmatched_files: true
 
-      # ---- nfpm: ship the same Linux/amd64 binary as .deb and .rpm ------
       - name: Install nfpm
         run: |
           curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.41.0/nfpm_2.41.0_Linux_x86_64.tar.gz \

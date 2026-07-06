@@ -9,6 +9,7 @@
     "noUnusedLocals": false,
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
     "outDir": "dist",
     "rootDir": "src"
   },

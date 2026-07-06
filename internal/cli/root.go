@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -48,6 +49,11 @@ func NewRootCmd(version string) *cobra.Command {
 // Execute runs the root command and exits with the appropriate code.
 func Execute(version string) {
 	if err := NewRootCmd(version).Execute(); err != nil {
+		var ec *exitCodeError
+		if errors.As(err, &ec) {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(ec.code)
+		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

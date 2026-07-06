@@ -23,8 +23,12 @@ yay -S archi-bin
 # mise
 mise use -g github:mpraes/archi
 
-# Direct binary download
+# Direct binary download (Linux)
 curl -fsSL https://github.com/mpraes/archi/releases/latest/download/archi-v0.1.0-linux-amd64.tar.gz | tar xz
+
+# Direct binary download (Windows)
+# Download archi-v0.1.0-windows-amd64.zip from GitHub Releases, extract archi.exe, then:
+# .\archi.exe . --no-browser
 
 # DEB / RPM
 sudo dpkg -i archi_0.1.0_amd64.deb
@@ -35,8 +39,8 @@ git clone https://github.com/mpraes/archi && cd archi
 (cd web && npm install && npm run build) && go build -o archi ./cmd/archi
 ```
 
-Pre-built binaries are published for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64,
-and windows/amd64. Checksums are attached to every release.
+Pre-built binaries are published for **linux/amd64** and **windows/amd64**.
+Checksums are attached to every release.
 
 ## Quickstart
 
@@ -109,9 +113,9 @@ Full design specs (in Portuguese) live in [`docs/`](./docs):
 ## Releasing
 
 Releases are tag-driven. CI runs on every push/PR; a `v*.*.*` tag (or manual dispatch with a
-`version` input) triggers the release job, which compiles native binaries for every target,
-slices the matching `## [<version>]` section out of `CHANGELOG.md` into the GitHub Release
-body, and fans out to Homebrew, AUR, and nfpm-packaged DEB/RPM.
+`version` input) triggers the release job, which cross-compiles linux/amd64 and windows/amd64
+binaries from Ubuntu, slices the matching `## [<version>]` section out of `CHANGELOG.md` into
+the GitHub Release body, and fans out to nfpm-packaged DEB/RPM for Linux.
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0

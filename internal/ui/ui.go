@@ -92,11 +92,11 @@ func (s *Spinner) Start() {
 		for {
 			select {
 			case <-s.stop:
-				fmt.Printf("\r\033[K")
+				fmt.Fprintf(os.Stderr, "\r\033[K")
 				return
 			case <-ticker.C:
 				frame := s.frames[i%len(s.frames)]
-				fmt.Printf("\r\033[K%s %s", frame, s.label)
+				fmt.Fprintf(os.Stderr, "\r\033[K%s %s", frame, s.label)
 				i++
 			}
 		}

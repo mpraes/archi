@@ -1,10 +1,10 @@
 /archi
 *.exe
 *.test
+coverage.out
 web/node_modules/
 web/dist/assets/
 .env
 homebrew-tap/
 .cache/
-.impeccable/
 PRODUCT.md

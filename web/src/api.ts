@@ -58,7 +58,8 @@ export async function streamAIInsights(
   onDone();
 }
 
-function normalizeSummary(raw: unknown): Summary {
+/** Normalizes API payload into the frontend Summary contract. */
+export function normalizeSummary(raw: unknown): Summary {
   const obj = asRecord(raw);
   const modulesRaw = asArray(obj.modules);
   const modules = modulesRaw.map((mod): Summary["modules"][number] => {

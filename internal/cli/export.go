@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -27,9 +28,9 @@ func newExportCmd(g *GlobalFlags) *cobra.Command {
 			}
 			switch strings.ToLower(format) {
 			case "json":
-				return exportJSON(summary)
+				return exportJSON(os.Stdout, summary)
 			case "markdown", "md":
-				return exportMarkdown(summary)
+				return exportMarkdown(os.Stdout, summary)
 			default:
 				return fmt.Errorf("formato não suportado: %s (use json ou markdown)", format)
 			}
@@ -39,39 +40,39 @@ func newExportCmd(g *GlobalFlags) *cobra.Command {
 	return cmd
 }
 
-func exportJSON(s model.Summary) error {
-	enc := json.NewEncoder(os.Stdout)
+func exportJSON(w io.Writer, s model.Summary) error {
+	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(s)
 }
 
-func exportMarkdown(s model.Summary) error {
-	fmt.Printf("# Archi — %s\n\n", s.ProjectName)
-	fmt.Printf("Módulos analisados: **%d**\n\n", s.ModuleCount)
+func exportMarkdown(w io.Writer, s model.Summary) error {
+	fmt.Fprintf(w, "# Archi — %s\n\n", s.ProjectName)
+	fmt.Fprintf(w, "Módulos analisados: **%d**\n\n", s.ModuleCount)
 	if len(s.Hotspots) > 0 {
-		fmt.Printf("## Hotspots\n\n")
+		fmt.Fprintf(w, "## Hotspots\n\n")
 		for _, h := range s.Hotspots {
-			fmt.Printf("- `%s`\n", h)
+			fmt.Fprintf(w, "- `%s`\n", h)
 		}
-		fmt.Println()
+		fmt.Fprintln(w)
 	}
-	fmt.Println("## Módulos")
-	fmt.Println()
-	fmt.Println("| Módulo | Ca | Ce | I | A | D | Complexidade máx | Abstratos | Concretos |")
-	fmt.Println("|--------|----|----|---|---|---|------------------|-----------|-----------|")
+	fmt.Fprintln(w, "## Módulos")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "| Módulo | Ca | Ce | I | A | D | Complexidade máx | Abstratos | Concretos |")
+	fmt.Fprintln(w, "|--------|----|----|---|---|---|------------------|-----------|-----------|")
 	for _, m := range s.Modules {
-		fmt.Printf("| `%s` | %d | %d | %.2f | %.2f | %.2f | %d | %d | %d |\n",
+		fmt.Fprintf(w, "| `%s` | %d | %d | %.2f | %.2f | %.2f | %d | %d | %d |\n",
 			m.Module, m.Afferent, m.Efferent, m.Instability, m.Abstraction,
 			m.Distance, m.MaxComplexity, m.Abstracts, m.Concretes)
 	}
 	if len(s.Connascence) > 0 {
-		fmt.Println()
-		fmt.Println("## Conascência")
-		fmt.Println()
-		fmt.Println("| Tipo | De | Para | Detalhe |")
-		fmt.Println("|------|----|------|---------|")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "## Conascência")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "| Tipo | De | Para | Detalhe |")
+		fmt.Fprintln(w, "|------|----|------|---------|")
 		for _, c := range s.Connascence {
-			fmt.Printf("| %s | `%s` | `%s` | %s |\n", c.Kind, c.From, c.To, c.Detail)
+			fmt.Fprintf(w, "| %s | `%s` | `%s` | %s |\n", c.Kind, c.From, c.To, c.Detail)
 		}
 	}
 	return nil

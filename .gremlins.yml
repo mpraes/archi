@@ -1,0 +1,14 @@
+type-mutators:
+  - conditionals/boundary
+  - conditionals/negation
+  - conditionals/remove
+  - arithmetic/base
+  - arithmetic/increment-decrement
+
+diff:
+  timeout: 10s
+
+coverage:
+  exclude:
+    - "cmd/archi"
+    - "e2e"

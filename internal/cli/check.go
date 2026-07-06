@@ -7,6 +7,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// exitCodeError signals a non-zero process exit without calling os.Exit in tests.
+type exitCodeError struct {
+	code int
+	msg  string
+}
+
+func (e *exitCodeError) Error() string { return e.msg }
+
 func newCheckCmd(g *GlobalFlags) *cobra.Command {
 	var maxDistance float64
 	cmd := &cobra.Command{
@@ -32,8 +40,7 @@ func newCheckCmd(g *GlobalFlags) *cobra.Command {
 				return nil
 			}
 			fmt.Fprintf(os.Stderr, "\n%d violações encontradas.\n", violations)
-			os.Exit(1)
-			return nil
+			return &exitCodeError{code: 1, msg: fmt.Sprintf("%d violações encontradas", violations)}
 		},
 	}
 	cmd.Flags().Float64Var(&maxDistance, "max-distance", 0.8, "Distância máxima da sequência principal permitida")

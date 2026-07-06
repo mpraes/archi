@@ -63,19 +63,22 @@ func runRoot(cmd *cobra.Command, args []string, g *GlobalFlags) error {
 	}
 }
 
+// scanCore parses and analyzes without terminal UI (used by tests).
+func scanCore(path string, g *GlobalFlags) (model.Summary, []string) {
+	prog := parser.Parse(path, parser.Options{
+		Lang:    g.Lang,
+		Exclude: g.Exclude,
+	})
+	return analyzer.Analyze(prog.Program), prog.Warnings
+}
+
 // scan parses and analyzes the project, returning the metrics summary plus
 // parser warnings (never fatal).
 func scan(path string, g *GlobalFlags) (model.Summary, []string) {
 	spin := ui.NewSpinner("Analisando estrutura...")
 	spin.Start()
 	defer spin.Stop()
-
-	prog := parser.Parse(path, parser.Options{
-		Lang:    g.Lang,
-		Exclude: g.Exclude,
-	})
-	s := analyzer.Analyze(prog.Program)
-	return s, prog.Warnings
+	return scanCore(path, g)
 }
 
 func aiEnabled(g *GlobalFlags) *ai.Config {
