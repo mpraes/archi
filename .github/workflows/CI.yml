@@ -330,7 +330,7 @@ jobs:
 
       - name: Create GitHub Release
         id: ghrel
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.version }}
           name: ${{ steps.ver.outputs.version }}
@@ -361,7 +361,7 @@ jobs:
           nfpm pkg --config nfpm.yaml --packager rpm --target dist/archi_${VERSION}_amd64.rpm
 
       - name: Upload DEB/RPM to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.version }}
           files: |
